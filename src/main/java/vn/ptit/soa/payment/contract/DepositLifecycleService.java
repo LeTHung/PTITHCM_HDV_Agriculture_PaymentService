@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import vn.ptit.soa.payment.dispute.DisputeRepository;
 
 @Service
 @Profile("database-learning")
@@ -17,14 +18,17 @@ public class DepositLifecycleService {
     private final ContractOutboxRepository contractOutbox;
     private final DepositOutboxRepository depositOutbox;
     private final Clock clock;
+    private final DisputeRepository disputes;
 
     public DepositLifecycleService(ContractRepository contracts, PaymentTrackingRepository tracking,
-            ContractOutboxRepository contractOutbox, DepositOutboxRepository depositOutbox, Clock clock) {
+            ContractOutboxRepository contractOutbox, DepositOutboxRepository depositOutbox,
+            Clock clock, DisputeRepository disputes) {
         this.contracts = contracts;
         this.tracking = tracking;
         this.contractOutbox = contractOutbox;
         this.depositOutbox = depositOutbox;
         this.clock = clock;
+        this.disputes = disputes;
     }
 
     // Learning-only: production must derive actor from JWT and check access-state.
@@ -41,6 +45,7 @@ public class DepositLifecycleService {
             return completeResult(contract, deposit);
         }
         if (!"ACTIVE".equals(contract.status()) || deposit.disputeHold()
+                || disputes.activeExists(id)
                 || !("LOCKED".equals(deposit.status()) || "RELEASABLE".equals(deposit.status())
                         || "RELEASED".equals(deposit.status()))) {
             throw new IllegalStateException("Contract cannot be completed in its current state.");
@@ -73,7 +78,8 @@ public class DepositLifecycleService {
         if ("RELEASED".equals(deposit.status())) {
             return releaseResult(contract, deposit);
         }
-        if (deposit.disputeHold() || !("ACTIVE".equals(contract.status())
+        if (deposit.disputeHold() || disputes.activeExists(id)
+                || !("ACTIVE".equals(contract.status())
                 || "COMPLETED".equals(contract.status()))) {
             throw new IllegalStateException("Deposit is not releasable.");
         }
@@ -103,6 +109,7 @@ public class DepositLifecycleService {
         Contract contract = lockedContract(id);
         PaymentTracking deposit = lockedDeposit(id);
         if (!"LOCKED".equals(deposit.status()) || deposit.disputeHold()
+                || disputes.activeExists(id)
                 || !("ACTIVE".equals(contract.status()) || "COMPLETED".equals(contract.status()))) {
             return false;
         }

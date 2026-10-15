@@ -90,6 +90,16 @@ public class PaymentTrackingRepository {
         if (changed != 1) throw new IllegalStateException("Deposit was not released.");
     }
 
+    public void setDisputeHold(String contractId, boolean hold, Instant now) {
+        int changed = jdbc.update("""
+                UPDATE learning.payment_tracking
+                SET dispute_hold=?,state_version=state_version+1,updated_at=?
+                WHERE contract_id=?::uuid AND status IN ('LOCKED','RELEASABLE')
+                  AND dispute_hold<>?
+                """, hold, Timestamp.from(now), contractId, hold);
+        if (changed != 1) throw new IllegalStateException("Deposit hold could not be changed.");
+    }
+
     private PaymentTracking map(java.sql.ResultSet rs, int row) throws java.sql.SQLException {
         return new PaymentTracking(rs.getString("payment_tracking_id"),
                         rs.getString("contract_id"), rs.getBigDecimal("deposit_rate"),

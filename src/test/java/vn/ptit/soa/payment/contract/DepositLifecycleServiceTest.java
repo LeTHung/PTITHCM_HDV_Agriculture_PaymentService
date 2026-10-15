@@ -18,6 +18,7 @@ import java.time.ZoneOffset;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import vn.ptit.soa.payment.dispute.DisputeRepository;
 
 class DepositLifecycleServiceTest {
     private static final String CONTRACT_ID = "d25c8106-a76f-4480-a747-6f0c7e2a042d";
@@ -30,6 +31,7 @@ class DepositLifecycleServiceTest {
     private ContractOutboxRepository contractOutbox;
     private DepositOutboxRepository depositOutbox;
     private DepositLifecycleService service;
+    private DisputeRepository disputes;
 
     @BeforeEach
     void setUp() {
@@ -37,8 +39,9 @@ class DepositLifecycleServiceTest {
         tracking = mock(PaymentTrackingRepository.class);
         contractOutbox = mock(ContractOutboxRepository.class);
         depositOutbox = mock(DepositOutboxRepository.class);
+        disputes = mock(DisputeRepository.class);
         service = new DepositLifecycleService(contracts, tracking, contractOutbox,
-                depositOutbox, Clock.fixed(NOW, ZoneOffset.UTC));
+                depositOutbox, Clock.fixed(NOW, ZoneOffset.UTC), disputes);
     }
 
     @Test
@@ -99,6 +102,17 @@ class DepositLifecycleServiceTest {
         verify(tracking).markCompletedAfterEligible(CONTRACT_ID, released.stateVersion() + 1, NOW);
         verify(tracking, never()).markReleasable(eq(CONTRACT_ID), anyLong(), any(), any(), any());
         verify(depositOutbox, never()).statusChanged(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void lateActiveDisputeBlocksCompletionEvenWithoutDepositHold() {
+        when(contracts.findByIdForUpdate(CONTRACT_ID)).thenReturn(Optional.of(contract("ACTIVE", null)));
+        when(tracking.findByContractIdForUpdate(CONTRACT_ID))
+                .thenReturn(Optional.of(deposit("RELEASED", NOW.minusSeconds(90000), false,
+                        NOW.minusSeconds(3600))));
+        when(disputes.activeExists(CONTRACT_ID)).thenReturn(true);
+        assertThrows(IllegalStateException.class, () -> service.complete(CONTRACT_ID, TRADER));
+        verify(contracts, never()).markCompleted(eq(CONTRACT_ID), anyLong(), any());
     }
 
     private Contract contract(String status, Instant completedAt) {
