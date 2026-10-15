@@ -14,15 +14,18 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import vn.ptit.soa.payment.dispute.Dispute;
 import vn.ptit.soa.payment.dispute.DisputeService;
+import vn.ptit.soa.payment.dispute.AdminDisputeListService;
 
 @RestController
 @Profile("learning & database-learning")
 @RequestMapping("/learning")
 public class LearningDisputeController {
     private final DisputeService disputes;
+    private final AdminDisputeListService adminList;
 
-    public LearningDisputeController(DisputeService disputes) {
+    public LearningDisputeController(DisputeService disputes, AdminDisputeListService adminList) {
         this.disputes = disputes;
+        this.adminList = adminList;
     }
 
     @PostMapping("/contracts/{contractId}/disputes")
@@ -40,6 +43,14 @@ public class LearningDisputeController {
     @GetMapping("/admin/disputes/{disputeId}")
     public Dispute findForAdmin(@PathVariable String disputeId, @RequestParam String adminId) {
         return disputes.findForAdmin(disputeId, adminId);
+    }
+
+    @GetMapping("/admin/disputes")
+    public AdminDisputeListService.Page listForAdmin(@RequestParam String adminId,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(required = false) Integer limit) {
+        return adminList.list(adminId, status, cursor, limit);
     }
 
     @PostMapping("/admin/disputes/{disputeId}/review")

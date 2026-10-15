@@ -4,6 +4,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.context.annotation.Profile;
@@ -39,6 +41,30 @@ public class DisputeRepository {
     public Optional<Dispute> findByIdForUpdate(String id) {
         return jdbc.query("SELECT * FROM learning.disputes WHERE dispute_id=?::uuid FOR UPDATE",
                 this::map, id).stream().findFirst();
+    }
+
+    public List<Dispute> findForIndependentAdmin(String adminId, String status,
+            Instant beforeCreatedAt, String beforeId, int limit) {
+        StringBuilder sql = new StringBuilder("""
+                SELECT d.* FROM learning.disputes d
+                JOIN learning.contracts c ON c.contract_id=d.contract_id
+                WHERE c.farmer_id<>?::uuid AND c.trader_id<>?::uuid
+                """);
+        List<Object> params = new ArrayList<>();
+        params.add(adminId);
+        params.add(adminId);
+        if (status != null) {
+            sql.append(" AND d.status=?");
+            params.add(status);
+        }
+        if (beforeCreatedAt != null) {
+            sql.append(" AND (d.created_at,d.dispute_id) < (?,?::uuid)");
+            params.add(Timestamp.from(beforeCreatedAt));
+            params.add(beforeId);
+        }
+        sql.append(" ORDER BY d.created_at DESC,d.dispute_id DESC LIMIT ?");
+        params.add(limit);
+        return jdbc.query(sql.toString(), this::map, params.toArray());
     }
 
     public boolean activeExists(String contractId) {
