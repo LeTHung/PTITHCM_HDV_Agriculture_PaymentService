@@ -75,6 +75,13 @@ public class DisputeRepository {
         return Boolean.TRUE.equals(present);
     }
 
+    public Optional<Dispute> findLatestForContract(String contractId) {
+        return jdbc.query("""
+                SELECT * FROM learning.disputes WHERE contract_id=?::uuid
+                ORDER BY created_at DESC,dispute_id DESC LIMIT 1
+                """, this::map, contractId).stream().findFirst();
+    }
+
     public void review(String id, String previousAdmin, String adminId, String note,
             Instant responseDueAt, long version, Instant now) {
         int changed = jdbc.update("""
@@ -120,11 +127,22 @@ public class DisputeRepository {
                 SELECT decision_id::text,dispute_id::text,admin_id::text,expected_version,
                        outcome,deposit_disposition,reason,evidence_refs
                 FROM learning.dispute_decisions WHERE decision_id=?::uuid
-                """, (rs, row) -> new DisputeDecision(rs.getString(1), rs.getString(2),
-                        rs.getString(3), rs.getLong(4), rs.getString(5),
-                        rs.getString(6), rs.getString(7),
-                        java.util.Arrays.stream((Object[]) rs.getArray(8).getArray())
-                                .map(Object::toString).toList()), decisionId).stream().findFirst();
+                """, this::mapDecision, decisionId).stream().findFirst();
+    }
+
+    public Optional<DisputeDecision> findDecisionForDispute(String disputeId) {
+        return jdbc.query("""
+                SELECT decision_id::text,dispute_id::text,admin_id::text,expected_version,
+                       outcome,deposit_disposition,reason,evidence_refs
+                FROM learning.dispute_decisions WHERE dispute_id=?::uuid
+                """, this::mapDecision, disputeId).stream().findFirst();
+    }
+
+    private DisputeDecision mapDecision(ResultSet rs, int row) throws SQLException {
+        return new DisputeDecision(rs.getString(1), rs.getString(2), rs.getString(3),
+                rs.getLong(4), rs.getString(5), rs.getString(6), rs.getString(7),
+                java.util.Arrays.stream((Object[]) rs.getArray(8).getArray())
+                        .map(Object::toString).toList());
     }
 
     private Dispute map(ResultSet rs, int row) throws SQLException {

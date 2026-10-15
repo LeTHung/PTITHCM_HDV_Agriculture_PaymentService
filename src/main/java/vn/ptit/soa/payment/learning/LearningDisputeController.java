@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import vn.ptit.soa.payment.dispute.Dispute;
 import vn.ptit.soa.payment.dispute.DisputeService;
 import vn.ptit.soa.payment.dispute.AdminDisputeListService;
+import vn.ptit.soa.payment.dispute.DisputeReadService;
 
 @RestController
 @Profile("learning & database-learning")
@@ -22,10 +23,13 @@ import vn.ptit.soa.payment.dispute.AdminDisputeListService;
 public class LearningDisputeController {
     private final DisputeService disputes;
     private final AdminDisputeListService adminList;
+    private final DisputeReadService reads;
 
-    public LearningDisputeController(DisputeService disputes, AdminDisputeListService adminList) {
+    public LearningDisputeController(DisputeService disputes, AdminDisputeListService adminList,
+            DisputeReadService reads) {
         this.disputes = disputes;
         this.adminList = adminList;
+        this.reads = reads;
     }
 
     @PostMapping("/contracts/{contractId}/disputes")
@@ -36,13 +40,15 @@ public class LearningDisputeController {
     }
 
     @GetMapping("/disputes/{disputeId}")
-    public Dispute find(@PathVariable String disputeId, @RequestParam String actorId) {
-        return disputes.findForParticipant(disputeId, actorId);
+    public DisputeReadService.DisputeDetail find(@PathVariable String disputeId,
+            @RequestParam String actorId) {
+        return reads.dispute(disputeId, actorId, false);
     }
 
     @GetMapping("/admin/disputes/{disputeId}")
-    public Dispute findForAdmin(@PathVariable String disputeId, @RequestParam String adminId) {
-        return disputes.findForAdmin(disputeId, adminId);
+    public DisputeReadService.DisputeDetail findForAdmin(@PathVariable String disputeId,
+            @RequestParam String adminId) {
+        return reads.dispute(disputeId, adminId, true);
     }
 
     @GetMapping("/admin/disputes")

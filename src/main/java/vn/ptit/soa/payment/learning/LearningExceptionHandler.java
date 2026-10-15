@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import vn.ptit.soa.payment.contract.TradingDepositClient.TradingUnavailableException;
 import vn.ptit.soa.payment.contract.DepositNotFoundException;
 import vn.ptit.soa.payment.dispute.EvidenceNotFoundException;
+import vn.ptit.soa.payment.dispute.DisputeReadNotFoundException;
 import vn.ptit.soa.payment.dispute.DisputeEvidenceService.ImageTooLargeException;
 import vn.ptit.soa.payment.dispute.DisputeEvidenceService.UnsupportedImageException;
 import vn.ptit.soa.payment.dispute.DisputeEvidenceService.EvidenceStorageException;
@@ -53,7 +54,8 @@ public class LearningExceptionHandler {
                 "path", request.getRequestURI()));
     }
 
-    @ExceptionHandler({EvidenceNotFoundException.class, DepositNotFoundException.class})
+    @ExceptionHandler({EvidenceNotFoundException.class, DepositNotFoundException.class,
+            DisputeReadNotFoundException.class})
     public ResponseEntity<Map<String, Object>> resourceNotFound(HttpServletRequest request) {
         return error(404, "NOT_FOUND", "Resource does not exist or is not accessible.", request);
     }
