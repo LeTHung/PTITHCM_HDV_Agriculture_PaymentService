@@ -16,6 +16,7 @@ import vn.ptit.soa.payment.dispute.Dispute;
 import vn.ptit.soa.payment.dispute.DisputeService;
 import vn.ptit.soa.payment.dispute.AdminDisputeListService;
 import vn.ptit.soa.payment.dispute.DisputeReadService;
+import vn.ptit.soa.payment.dispute.AdminCompletionService;
 
 @RestController
 @Profile("learning & database-learning")
@@ -24,12 +25,14 @@ public class LearningDisputeController {
     private final DisputeService disputes;
     private final AdminDisputeListService adminList;
     private final DisputeReadService reads;
+    private final AdminCompletionService adminCompletion;
 
     public LearningDisputeController(DisputeService disputes, AdminDisputeListService adminList,
-            DisputeReadService reads) {
+            DisputeReadService reads, AdminCompletionService adminCompletion) {
         this.disputes = disputes;
         this.adminList = adminList;
         this.reads = reads;
+        this.adminCompletion = adminCompletion;
     }
 
     @PostMapping("/contracts/{contractId}/disputes")
@@ -74,6 +77,13 @@ public class LearningDisputeController {
                 request.liableAccountId(), request.violationCode(), request.penaltyPoints());
     }
 
+    @PostMapping("/admin/contracts/{contractId}/complete")
+    public AdminCompletionService.Result adminComplete(@PathVariable String contractId,
+            @RequestBody AdminCompleteRequest request) {
+        return adminCompletion.complete(contractId, request.adminId(), request.reason(),
+                request.evidenceRefs(), request.expectedVersion());
+    }
+
     public record OpenRequest(String actorId, String reasonCode, String description,
             List<String> evidenceRefs) {}
 
@@ -82,4 +92,7 @@ public class LearningDisputeController {
     public record SafeDecisionRequest(String decisionId, String adminId, long expectedVersion,
             String outcome, String depositDisposition, String reason, List<String> evidenceRefs,
             String liableAccountId, String violationCode, String penaltyPoints) {}
+
+    public record AdminCompleteRequest(String adminId, String reason,
+            List<String> evidenceRefs, long expectedVersion) {}
 }
