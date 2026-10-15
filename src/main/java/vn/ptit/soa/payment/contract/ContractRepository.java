@@ -67,6 +67,15 @@ public class ContractRepository {
         if (changed != 1) throw new IllegalStateException("Contract was not activated.");
     }
 
+    public void markCompleted(String contractId, long stateVersion, java.time.Instant now) {
+        int changed = jdbc.update("""
+                UPDATE learning.contracts
+                SET status='COMPLETED',completed_confirmed_at=?,state_version=?,updated_at=?
+                WHERE contract_id=?::uuid AND status='ACTIVE'
+                """, Timestamp.from(now), stateVersion, Timestamp.from(now), contractId);
+        if (changed != 1) throw new IllegalStateException("Contract was not completed.");
+    }
+
     private Contract map(java.sql.ResultSet rs, int row) throws java.sql.SQLException {
         return new Contract(rs.getString("contract_id"), rs.getString("offer_id"),
                 rs.getString("conversation_id"), rs.getString("farmer_id"),

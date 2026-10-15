@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import vn.ptit.soa.payment.contract.DepositFinalizer;
 import vn.ptit.soa.payment.contract.DepositService;
+import vn.ptit.soa.payment.contract.DepositLifecycleService;
 import vn.ptit.soa.payment.contract.PaymentTracking;
 
 @RestController
@@ -16,9 +17,11 @@ import vn.ptit.soa.payment.contract.PaymentTracking;
 @RequestMapping("/learning/deposits")
 public class LearningDepositController {
     private final DepositService deposits;
+    private final DepositLifecycleService lifecycle;
 
-    public LearningDepositController(DepositService deposits) {
+    public LearningDepositController(DepositService deposits, DepositLifecycleService lifecycle) {
         this.deposits = deposits;
+        this.lifecycle = lifecycle;
     }
 
     @GetMapping("/{contractId}")
@@ -33,4 +36,12 @@ public class LearningDepositController {
     }
 
     public record PayRequest(String traderId) {}
+
+    @PostMapping("/{contractId}/release")
+    public DepositLifecycleService.ReleaseResult release(@PathVariable String contractId,
+            @RequestBody ReleaseRequest request) {
+        return lifecycle.release(contractId, request.farmerId());
+    }
+
+    public record ReleaseRequest(String farmerId) {}
 }

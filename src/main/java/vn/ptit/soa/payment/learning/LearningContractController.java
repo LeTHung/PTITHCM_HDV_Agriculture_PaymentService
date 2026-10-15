@@ -12,15 +12,18 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import vn.ptit.soa.payment.contract.Contract;
 import vn.ptit.soa.payment.contract.ContractService;
+import vn.ptit.soa.payment.contract.DepositLifecycleService;
 
 @RestController
 @Profile("learning & database-learning")
 @RequestMapping("/learning/contracts")
 public class LearningContractController {
     private final ContractService contracts;
+    private final DepositLifecycleService lifecycle;
 
-    public LearningContractController(ContractService contracts) {
+    public LearningContractController(ContractService contracts, DepositLifecycleService lifecycle) {
         this.contracts = contracts;
+        this.lifecycle = lifecycle;
     }
 
     @PostMapping
@@ -56,4 +59,12 @@ public class LearningContractController {
             String deliveryDate, String terms) {}
 
     public record AcceptContractRequest(String farmerId) {}
+
+    @PostMapping("/{contractId}/complete")
+    public DepositLifecycleService.CompleteResult complete(@PathVariable String contractId,
+            @RequestBody CompleteContractRequest request) {
+        return lifecycle.complete(contractId, request.traderId());
+    }
+
+    public record CompleteContractRequest(String traderId) {}
 }

@@ -47,7 +47,7 @@ public class DepositFinalizer {
         PaymentTracking locked = tracking.findByContractId(contractId).orElseThrow();
         contractOutbox.statusChanged(active, "PENDING_DEPOSIT", traderId, now);
         depositOutbox.paid(active, locked, now);
-        depositOutbox.statusChanged(active, locked, now);
+        depositOutbox.statusChanged(active, locked, "PENDING", traderId, now);
         return result(active, locked);
     }
 

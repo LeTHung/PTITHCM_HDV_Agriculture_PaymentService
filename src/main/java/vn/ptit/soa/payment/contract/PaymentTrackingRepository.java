@@ -1,6 +1,8 @@
 package vn.ptit.soa.payment.contract;
 
 import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -46,6 +48,46 @@ public class PaymentTrackingRepository {
                 WHERE contract_id=?::uuid AND status='PENDING'
                 """, Timestamp.from(now), stateVersion, Timestamp.from(now), contractId);
         if (changed != 1) throw new IllegalStateException("Deposit was not locked.");
+    }
+
+    public List<String> findDueContractIds(Instant cutoff, int limit) {
+        return jdbc.queryForList("""
+                SELECT contract_id::text FROM learning.payment_tracking
+                WHERE status='LOCKED' AND dispute_hold=false AND delivery_date<=?
+                ORDER BY delivery_date,payment_tracking_id LIMIT ?
+                """, String.class, Timestamp.from(cutoff), limit);
+    }
+
+    public void markReleasable(String contractId, long stateVersion,
+            Instant releaseAt, Instant completedAt, Instant now) {
+        int changed = jdbc.update("""
+                UPDATE learning.payment_tracking
+                SET status='RELEASABLE',release_at=?,completed_confirmed_at=?,
+                    state_version=?,updated_at=?
+                WHERE contract_id=?::uuid AND status='LOCKED' AND dispute_hold=false
+                """, Timestamp.from(releaseAt),
+                completedAt == null ? null : Timestamp.from(completedAt),
+                stateVersion, Timestamp.from(now), contractId);
+        if (changed != 1) throw new IllegalStateException("Deposit was not made releasable.");
+    }
+
+    public void markCompletedAfterEligible(String contractId, long stateVersion, Instant now) {
+        int changed = jdbc.update("""
+                UPDATE learning.payment_tracking
+                SET completed_confirmed_at=?,state_version=?,updated_at=?
+                WHERE contract_id=?::uuid AND status IN ('RELEASABLE','RELEASED')
+                  AND completed_confirmed_at IS NULL
+                """, Timestamp.from(now), stateVersion, Timestamp.from(now), contractId);
+        if (changed != 1) throw new IllegalStateException("Deposit completion was not recorded.");
+    }
+
+    public void markReleased(String contractId, long stateVersion, Instant now) {
+        int changed = jdbc.update("""
+                UPDATE learning.payment_tracking
+                SET status='RELEASED',released_at=?,state_version=?,updated_at=?
+                WHERE contract_id=?::uuid AND status='RELEASABLE' AND dispute_hold=false
+                """, Timestamp.from(now), stateVersion, Timestamp.from(now), contractId);
+        if (changed != 1) throw new IllegalStateException("Deposit was not released.");
     }
 
     private PaymentTracking map(java.sql.ResultSet rs, int row) throws java.sql.SQLException {

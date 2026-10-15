@@ -24,7 +24,7 @@ public class DepositOutboxRepository {
     }
 
     public void paid(Contract contract, PaymentTracking tracking, Instant now) {
-        save("DEPOSIT_PAID", contract, tracking, now, Map.of(
+        save("DEPOSIT_PAID", contract, tracking, contract.traderId(), now, Map.of(
                 "depositId", tracking.paymentTrackingId(),
                 "paymentId", tracking.paymentTrackingId(),
                 "contractId", contract.contractId(),
@@ -34,18 +34,19 @@ public class DepositOutboxRepository {
                 "currency", "VND"));
     }
 
-    public void statusChanged(Contract contract, PaymentTracking tracking, Instant now) {
-        save("DEPOSIT_STATUS_CHANGED", contract, tracking, now, Map.of(
+    public void statusChanged(Contract contract, PaymentTracking tracking,
+            String previousStatus, String actorId, Instant now) {
+        save("DEPOSIT_STATUS_CHANGED", contract, tracking, actorId, now, Map.of(
                 "depositId", tracking.paymentTrackingId(),
                 "contractId", contract.contractId(),
                 "farmerId", contract.farmerId(),
                 "traderId", contract.traderId(),
-                "previousStatus", "PENDING", "status", "LOCKED",
+                "previousStatus", previousStatus, "status", tracking.status(),
                 "stateVersion", tracking.stateVersion()));
     }
 
     private void save(String eventType, Contract contract, PaymentTracking tracking,
-            Instant now, Map<String, Object> data) {
+            String actorId, Instant now, Map<String, Object> data) {
         String eventId = UUID.randomUUID().toString();
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("eventId", eventId);
@@ -53,7 +54,7 @@ public class DepositOutboxRepository {
         payload.put("eventVersion", 1);
         payload.put("sourceService", "payment-service");
         payload.put("occurredAt", now.toString());
-        payload.put("actorId", contract.traderId());
+        payload.put("actorId", actorId);
         payload.put("recipientIds", List.of(contract.farmerId(), contract.traderId()));
         payload.put("referenceType", "DEPOSIT");
         payload.put("referenceId", tracking.paymentTrackingId());
