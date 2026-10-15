@@ -9,6 +9,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import vn.ptit.soa.payment.contract.TradingDepositClient.TradingUnavailableException;
+import vn.ptit.soa.payment.contract.DepositNotFoundException;
 import vn.ptit.soa.payment.dispute.EvidenceNotFoundException;
 import vn.ptit.soa.payment.dispute.DisputeEvidenceService.ImageTooLargeException;
 import vn.ptit.soa.payment.dispute.DisputeEvidenceService.UnsupportedImageException;
@@ -52,9 +53,9 @@ public class LearningExceptionHandler {
                 "path", request.getRequestURI()));
     }
 
-    @ExceptionHandler(EvidenceNotFoundException.class)
-    public ResponseEntity<Map<String, Object>> evidenceNotFound(HttpServletRequest request) {
-        return error(404, "NOT_FOUND", "Evidence does not exist or is not accessible.", request);
+    @ExceptionHandler({EvidenceNotFoundException.class, DepositNotFoundException.class})
+    public ResponseEntity<Map<String, Object>> resourceNotFound(HttpServletRequest request) {
+        return error(404, "NOT_FOUND", "Resource does not exist or is not accessible.", request);
     }
 
     @ExceptionHandler({ImageTooLargeException.class, MaxUploadSizeExceededException.class})

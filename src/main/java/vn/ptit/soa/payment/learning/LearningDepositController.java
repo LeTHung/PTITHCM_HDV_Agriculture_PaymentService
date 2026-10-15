@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import vn.ptit.soa.payment.contract.DepositFinalizer;
 import vn.ptit.soa.payment.contract.DepositService;
@@ -25,8 +26,16 @@ public class LearningDepositController {
     }
 
     @GetMapping("/{contractId}")
-    public PaymentTracking find(@PathVariable String contractId) {
-        return deposits.find(contractId);
+    public PaymentTracking find(@PathVariable String contractId, @RequestParam String actorId) {
+        return deposits.find(contractId, actorId);
+    }
+
+    @GetMapping
+    public DepositService.DepositPage list(@RequestParam String actorId,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(required = false) Integer limit) {
+        return deposits.list(actorId, status, cursor, limit);
     }
 
     @PostMapping("/{contractId}/pay")

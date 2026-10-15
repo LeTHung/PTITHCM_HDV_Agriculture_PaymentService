@@ -4,6 +4,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.ArrayList;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -39,6 +40,30 @@ public class PaymentTrackingRepository {
     public Optional<PaymentTracking> findByContractIdForUpdate(String contractId) {
         return jdbc.query("SELECT * FROM learning.payment_tracking WHERE contract_id=?::uuid FOR UPDATE",
                 this::map, contractId).stream().findFirst();
+    }
+
+    public List<PaymentTracking> findForParticipant(String actorId, String status,
+            Instant beforeCreatedAt, String beforeId, int limit) {
+        StringBuilder sql = new StringBuilder("""
+                SELECT p.* FROM learning.payment_tracking p
+                JOIN learning.contracts c ON c.contract_id=p.contract_id
+                WHERE (c.farmer_id=?::uuid OR c.trader_id=?::uuid)
+                """);
+        List<Object> params = new ArrayList<>();
+        params.add(actorId);
+        params.add(actorId);
+        if (status != null) {
+            sql.append(" AND p.status=?");
+            params.add(status);
+        }
+        if (beforeCreatedAt != null) {
+            sql.append(" AND (p.created_at,p.payment_tracking_id) < (?,?::uuid)");
+            params.add(Timestamp.from(beforeCreatedAt));
+            params.add(beforeId);
+        }
+        sql.append(" ORDER BY p.created_at DESC,p.payment_tracking_id DESC LIMIT ?");
+        params.add(limit);
+        return jdbc.query(sql.toString(), this::map, params.toArray());
     }
 
     public void markLocked(String contractId, long stateVersion, java.time.Instant now) {
