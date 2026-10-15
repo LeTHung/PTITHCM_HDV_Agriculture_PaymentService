@@ -31,7 +31,25 @@ public class PaymentTrackingRepository {
 
     public Optional<PaymentTracking> findByContractId(String contractId) {
         return jdbc.query("SELECT * FROM learning.payment_tracking WHERE contract_id=?::uuid",
-                (rs, row) -> new PaymentTracking(rs.getString("payment_tracking_id"),
+                this::map, contractId).stream().findFirst();
+    }
+
+    public Optional<PaymentTracking> findByContractIdForUpdate(String contractId) {
+        return jdbc.query("SELECT * FROM learning.payment_tracking WHERE contract_id=?::uuid FOR UPDATE",
+                this::map, contractId).stream().findFirst();
+    }
+
+    public void markLocked(String contractId, long stateVersion, java.time.Instant now) {
+        int changed = jdbc.update("""
+                UPDATE learning.payment_tracking
+                SET status='LOCKED',paid_at=?,state_version=?,updated_at=?
+                WHERE contract_id=?::uuid AND status='PENDING'
+                """, Timestamp.from(now), stateVersion, Timestamp.from(now), contractId);
+        if (changed != 1) throw new IllegalStateException("Deposit was not locked.");
+    }
+
+    private PaymentTracking map(java.sql.ResultSet rs, int row) throws java.sql.SQLException {
+        return new PaymentTracking(rs.getString("payment_tracking_id"),
                         rs.getString("contract_id"), rs.getBigDecimal("deposit_rate"),
                         rs.getBigDecimal("deposit_amount"), rs.getString("status"),
                         rs.getTimestamp("paid_at") == null ? null : rs.getTimestamp("paid_at").toInstant(),
@@ -42,6 +60,6 @@ public class PaymentTrackingRepository {
                         rs.getTimestamp("released_at") == null ? null : rs.getTimestamp("released_at").toInstant(),
                         rs.getBoolean("dispute_hold"), rs.getLong("state_version"),
                         rs.getTimestamp("created_at").toInstant(),
-                        rs.getTimestamp("updated_at").toInstant()), contractId).stream().findFirst();
+                        rs.getTimestamp("updated_at").toInstant());
     }
 }

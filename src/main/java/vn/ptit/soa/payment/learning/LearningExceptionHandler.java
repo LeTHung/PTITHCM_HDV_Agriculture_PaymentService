@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import vn.ptit.soa.payment.contract.TradingDepositClient.TradingUnavailableException;
 
 @Profile({"learning", "database-learning"})
 @RestControllerAdvice(basePackageClasses = LearningController.class)
@@ -31,6 +32,17 @@ public class LearningExceptionHandler {
                 "timestamp", Instant.now().toString(),
                 "status", 409,
                 "code", "CONFLICT",
+                "message", exception.getMessage(),
+                "path", request.getRequestURI()));
+    }
+
+    @ExceptionHandler(TradingUnavailableException.class)
+    public ResponseEntity<Map<String, Object>> tradingUnavailable(TradingUnavailableException exception,
+            HttpServletRequest request) {
+        return ResponseEntity.status(503).body(Map.of(
+                "timestamp", Instant.now().toString(),
+                "status", 503,
+                "code", "DEPENDENCY_UNAVAILABLE",
                 "message", exception.getMessage(),
                 "path", request.getRequestURI()));
     }
