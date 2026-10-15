@@ -9,6 +9,11 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import vn.ptit.soa.payment.contract.TradingDepositClient.TradingUnavailableException;
+import vn.ptit.soa.payment.dispute.EvidenceNotFoundException;
+import vn.ptit.soa.payment.dispute.DisputeEvidenceService.ImageTooLargeException;
+import vn.ptit.soa.payment.dispute.DisputeEvidenceService.UnsupportedImageException;
+import vn.ptit.soa.payment.dispute.DisputeEvidenceService.EvidenceStorageException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 @Profile({"learning", "database-learning"})
 @RestControllerAdvice(basePackageClasses = LearningController.class)
@@ -44,6 +49,36 @@ public class LearningExceptionHandler {
                 "status", 503,
                 "code", "DEPENDENCY_UNAVAILABLE",
                 "message", exception.getMessage(),
+                "path", request.getRequestURI()));
+    }
+
+    @ExceptionHandler(EvidenceNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> evidenceNotFound(HttpServletRequest request) {
+        return error(404, "NOT_FOUND", "Evidence does not exist or is not accessible.", request);
+    }
+
+    @ExceptionHandler({ImageTooLargeException.class, MaxUploadSizeExceededException.class})
+    public ResponseEntity<Map<String, Object>> imageTooLarge(HttpServletRequest request) {
+        return error(413, "PAYLOAD_TOO_LARGE", "Image exceeds the upload limit.", request);
+    }
+
+    @ExceptionHandler(UnsupportedImageException.class)
+    public ResponseEntity<Map<String, Object>> unsupportedImage(HttpServletRequest request) {
+        return error(415, "UNSUPPORTED_MEDIA_TYPE", "Only JPEG, PNG, and WebP are supported.", request);
+    }
+
+    @ExceptionHandler(EvidenceStorageException.class)
+    public ResponseEntity<Map<String, Object>> evidenceUnavailable(HttpServletRequest request) {
+        return error(503, "DEPENDENCY_UNAVAILABLE", "Evidence storage is unavailable.", request);
+    }
+
+    private ResponseEntity<Map<String, Object>> error(int status, String code,
+            String message, HttpServletRequest request) {
+        return ResponseEntity.status(status).body(Map.of(
+                "timestamp", Instant.now().toString(),
+                "status", status,
+                "code", code,
+                "message", message,
                 "path", request.getRequestURI()));
     }
 }

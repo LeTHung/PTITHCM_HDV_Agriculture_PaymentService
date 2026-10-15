@@ -32,14 +32,16 @@ class DisputeServiceTest {
     private ContractRepository contracts;
     private PaymentTrackingRepository tracking;
     private DisputeService service;
+    private DisputeEvidenceRepository evidence;
 
     @BeforeEach
     void setUp() {
         disputes = mock(DisputeRepository.class);
         contracts = mock(ContractRepository.class);
         tracking = mock(PaymentTrackingRepository.class);
+        evidence = mock(DisputeEvidenceRepository.class);
         service = new DisputeService(disputes, contracts, tracking,
-                Clock.fixed(NOW, ZoneOffset.UTC));
+                Clock.fixed(NOW, ZoneOffset.UTC), evidence);
         Contract contract = new Contract(CONTRACT_ID,
                 "202fe3fd-626a-41c8-80fd-70af82c1f256",
                 "f72a08bd-33d7-4221-9e55-55d5d7f2e2f0", FARMER, TRADER,

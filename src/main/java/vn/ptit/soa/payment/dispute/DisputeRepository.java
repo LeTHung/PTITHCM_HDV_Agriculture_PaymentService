@@ -81,21 +81,24 @@ public class DisputeRepository {
         jdbc.update("""
                 INSERT INTO learning.dispute_decisions
                 (decision_id,dispute_id,admin_id,expected_version,outcome,
-                 deposit_disposition,reason,created_at)
-                VALUES (?::uuid,?::uuid,?::uuid,?,?,?,?,?)
+                 deposit_disposition,reason,evidence_refs,created_at)
+                VALUES (?::uuid,?::uuid,?::uuid,?,?,?,?,?::uuid[],?)
                 """, decision.decisionId(), decision.disputeId(), decision.adminId(),
                 decision.expectedVersion(), decision.outcome(),
-                decision.depositDisposition(), decision.reason(), Timestamp.from(now));
+                decision.depositDisposition(), decision.reason(),
+                "{" + String.join(",", decision.evidenceRefs()) + "}", Timestamp.from(now));
     }
 
     public Optional<DisputeDecision> findDecision(String decisionId) {
         return jdbc.query("""
                 SELECT decision_id::text,dispute_id::text,admin_id::text,expected_version,
-                       outcome,deposit_disposition,reason
+                       outcome,deposit_disposition,reason,evidence_refs
                 FROM learning.dispute_decisions WHERE decision_id=?::uuid
                 """, (rs, row) -> new DisputeDecision(rs.getString(1), rs.getString(2),
                         rs.getString(3), rs.getLong(4), rs.getString(5),
-                        rs.getString(6), rs.getString(7)), decisionId).stream().findFirst();
+                        rs.getString(6), rs.getString(7),
+                        java.util.Arrays.stream((Object[]) rs.getArray(8).getArray())
+                                .map(Object::toString).toList()), decisionId).stream().findFirst();
     }
 
     private Dispute map(ResultSet rs, int row) throws SQLException {

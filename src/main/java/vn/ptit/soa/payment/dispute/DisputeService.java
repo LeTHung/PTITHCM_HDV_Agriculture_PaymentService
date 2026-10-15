@@ -4,6 +4,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.UUID;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
@@ -20,13 +22,16 @@ public class DisputeService {
     private final ContractRepository contracts;
     private final PaymentTrackingRepository tracking;
     private final Clock clock;
+    private final DisputeEvidenceRepository evidence;
 
     public DisputeService(DisputeRepository disputes, ContractRepository contracts,
-            PaymentTrackingRepository tracking, Clock clock) {
+            PaymentTrackingRepository tracking, Clock clock,
+            DisputeEvidenceRepository evidence) {
         this.disputes = disputes;
         this.contracts = contracts;
         this.tracking = tracking;
         this.clock = clock;
+        this.evidence = evidence;
     }
 
     // Learning-only: actor IDs must come from verified JWT/access-state in production.
@@ -75,6 +80,23 @@ public class DisputeService {
         return dispute;
     }
 
+    public Dispute requireEvidenceAccess(String disputeId, String actorId,
+            boolean asAdmin, boolean forUpload) {
+        String id = uuid(disputeId);
+        String actor = uuid(actorId);
+        Dispute dispute = (forUpload ? disputes.findByIdForUpdate(id) : disputes.findById(id))
+                .orElseThrow(EvidenceNotFoundException::new);
+        Contract contract = contracts.findById(dispute.contractId())
+                .orElseThrow(EvidenceNotFoundException::new);
+        boolean allowed = asAdmin
+                ? !isParticipant(contract, actor) && actor.equals(dispute.assignedAdminId())
+                : isParticipant(contract, actor);
+        if (!allowed || (forUpload && "RESOLVED".equals(dispute.status()))) {
+            throw new EvidenceNotFoundException();
+        }
+        return dispute;
+    }
+
     @Transactional
     public Dispute review(String disputeId, String adminId, String note, Long expectedVersion) {
         String id = uuid(disputeId);
@@ -120,10 +142,10 @@ public class DisputeService {
                 || violationCode != null || penaltyPoints != null) {
             throw new IllegalArgumentException("This learning phase only closes without penalty or settlement.");
         }
-        requireNoEvidenceRefs(evidenceRefs);
         String decisionReason = required(reason, "reason", 5000);
+        List<String> verifiedRefs = verifiedEvidenceRefs(id, evidenceRefs);
         DisputeDecision submitted = new DisputeDecision(decision, id, admin,
-                expectedVersion, outcome, disposition, decisionReason);
+                expectedVersion, outcome, disposition, decisionReason, verifiedRefs);
         Dispute snapshot = find(id);
         Contract contract = lockedContract(snapshot.contractId());
         requireIndependentAdmin(contract, admin);
@@ -188,6 +210,23 @@ public class DisputeService {
         if (refs != null && !refs.isEmpty()) {
             throw new IllegalArgumentException("Evidence upload is not available in this learning phase.");
         }
+    }
+
+    private List<String> verifiedEvidenceRefs(String disputeId, List<String> refs) {
+        if (refs == null || refs.isEmpty()) return List.of();
+        if (refs.size() > 20) throw new IllegalArgumentException("Too many evidence references.");
+        List<String> verified = new ArrayList<>();
+        for (String ref : refs) {
+            String id = uuid(ref);
+            if (!evidence.belongsToDispute(id, disputeId)) {
+                throw new IllegalArgumentException("Evidence must belong to this dispute.");
+            }
+            verified.add(id);
+        }
+        if (new HashSet<>(verified).size() != verified.size()) {
+            throw new IllegalArgumentException("Duplicate evidence reference.");
+        }
+        return List.copyOf(verified);
     }
 
     private String required(String value, String name, int maxLength) {
