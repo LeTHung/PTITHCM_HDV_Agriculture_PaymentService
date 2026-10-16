@@ -84,6 +84,19 @@ class DisputeServiceTest {
         verifyNoInteractions(disputes, tracking);
     }
 
+    @Test
+    void adminEvidenceSourceMustBeContractParticipant() {
+        Contract contract = contracts.findByIdForUpdate(CONTRACT_ID).orElseThrow();
+        when(contracts.findById(CONTRACT_ID)).thenReturn(Optional.of(contract));
+        Dispute dispute = new Dispute("419a5f73-efe3-4a2c-89ed-6e2342d1f865",
+                CONTRACT_ID, FARMER, "DELIVERY", "Details", "OPEN", true,
+                null, null, null, null, 1, 0, NOW, NOW);
+        assertTrue(FARMER.equals(service.requireEvidenceSource(dispute, FARMER)));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.requireEvidenceSource(dispute,
+                        "00000000-0000-0000-0000-000000000001"));
+    }
+
     private PaymentTracking deposit(String status) {
         return new PaymentTracking("e99f11f1-018b-4e7e-b267-c4def2e8505b", CONTRACT_ID,
                 new BigDecimal("5.00"), new BigDecimal("500001.00"), status, NOW,

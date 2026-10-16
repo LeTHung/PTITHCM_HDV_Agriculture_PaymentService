@@ -97,6 +97,16 @@ public class DisputeService {
         return dispute;
     }
 
+    public String requireEvidenceSource(Dispute dispute, String sourceAccountId) {
+        String source = uuid(sourceAccountId);
+        Contract contract = contracts.findById(dispute.contractId())
+                .orElseThrow(EvidenceNotFoundException::new);
+        if (!isParticipant(contract, source)) {
+            throw new IllegalArgumentException("Evidence source must be a Contract participant.");
+        }
+        return source;
+    }
+
     @Transactional
     public Dispute review(String disputeId, String adminId, String note, Long expectedVersion) {
         String id = uuid(disputeId);

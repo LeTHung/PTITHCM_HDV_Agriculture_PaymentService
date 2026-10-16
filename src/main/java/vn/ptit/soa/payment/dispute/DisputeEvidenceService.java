@@ -15,6 +15,9 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.Duration;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.List;
 import java.util.HexFormat;
 import java.util.Iterator;
 import java.util.UUID;
@@ -54,7 +57,18 @@ public class DisputeEvidenceService {
     @Transactional
     public UploadResult upload(String disputeId, String actorId, boolean asAdmin,
             MultipartFile file, String description) {
+        return upload(disputeId, actorId, asAdmin, file, description, null);
+    }
+
+    @Transactional
+    public UploadResult upload(String disputeId, String actorId, boolean asAdmin,
+            MultipartFile file, String description, String sourceAccountId) {
         Dispute dispute = disputes.requireEvidenceAccess(disputeId, actorId, asAdmin, true);
+        String source = asAdmin
+                ? disputes.requireEvidenceSource(dispute, sourceAccountId) : null;
+        if (!asAdmin && sourceAccountId != null) {
+            throw new IllegalArgumentException("Only an Admin can declare an evidence source.");
+        }
         if (file == null || file.isEmpty()) throw new IllegalArgumentException("Image file is required.");
         if (file.getSize() > maxBytes) throw new ImageTooLargeException();
         if (description != null && description.length() > 5000) {
@@ -79,7 +93,7 @@ public class DisputeEvidenceService {
             Instant now = clock.instant();
             String evidenceId = UUID.randomUUID().toString();
             DisputeEvidence metadata = new DisputeEvidence(evidenceId, dispute.disputeId(),
-                    UUID.fromString(actorId).toString(), storageKey, clean.contentType(),
+                    UUID.fromString(actorId).toString(), source, storageKey, clean.contentType(),
                     clean.bytes().length, sha256(clean.bytes()), description, now, now);
             evidence.insert(metadata);
             return new UploadResult(evidenceId,
@@ -89,6 +103,58 @@ public class DisputeEvidenceService {
             throw new EvidenceStorageException("Evidence could not be stored.", failed);
         }
     }
+
+    public EvidencePage list(String disputeId, String actorId, boolean asAdmin,
+            String cursor, Integer requestedLimit) {
+        Dispute dispute = disputes.requireEvidenceAccess(disputeId, actorId, asAdmin, false);
+        int limit = requestedLimit == null ? 20 : requestedLimit;
+        if (limit < 1 || limit > 100) {
+            throw new IllegalArgumentException("limit must be between 1 and 100.");
+        }
+        EvidenceCursor before = decodeCursor(cursor);
+        List<DisputeEvidence> found = evidence.findPage(dispute.disputeId(),
+                before == null ? null : before.createdAt(),
+                before == null ? null : before.id(), limit + 1);
+        boolean more = found.size() > limit;
+        List<EvidenceItem> items = found.subList(0, Math.min(limit, found.size())).stream()
+                .map(item -> new EvidenceItem(item.evidenceId(), item.uploaderId(),
+                        item.sourceAccountId(), item.description(), item.contentType(),
+                        item.sizeBytes(), item.createdAt(),
+                        "/learning/disputes/" + dispute.disputeId()
+                                + "/evidence/" + item.evidenceId()))
+                .toList();
+        DisputeEvidence last = items.isEmpty() ? null : found.get(items.size() - 1);
+        return new EvidencePage(items, more ? encodeCursor(last) : null);
+    }
+
+    private String encodeCursor(DisputeEvidence last) {
+        String raw = last.createdAt() + "|" + last.evidenceId();
+        return Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(raw.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private EvidenceCursor decodeCursor(String token) {
+        if (token == null) return null;
+        if (token.isBlank() || token.length() > 256) {
+            throw new IllegalArgumentException("Invalid evidence cursor.");
+        }
+        try {
+            String raw = new String(Base64.getUrlDecoder().decode(token), StandardCharsets.UTF_8);
+            String[] parts = raw.split("\\|", -1);
+            if (parts.length != 2) throw new IllegalArgumentException();
+            return new EvidenceCursor(Instant.parse(parts[0]), strictUuid(parts[1]));
+        } catch (RuntimeException invalid) {
+            throw new IllegalArgumentException("Invalid evidence cursor.");
+        }
+    }
+
+    private record EvidenceCursor(Instant createdAt, String id) {}
+
+    public record EvidenceItem(String evidenceId, String uploaderId, String sourceAccountId,
+            String description, String contentType, long sizeBytes, Instant createdAt,
+            String downloadUrl) {}
+
+    public record EvidencePage(List<EvidenceItem> items, String nextCursor) {}
 
     public DownloadResult download(String disputeId, String evidenceId,
             String actorId, boolean asAdmin) {

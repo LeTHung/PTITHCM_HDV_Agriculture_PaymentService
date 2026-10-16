@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.List;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -28,6 +29,7 @@ import org.springframework.mock.web.MockMultipartFile;
 class DisputeEvidenceServiceTest {
     private static final String DISPUTE = "419a5f73-efe3-4a2c-89ed-6e2342d1f865";
     private static final String ACTOR = "233196d7-d149-451d-8006-91e6563be4f0";
+    private static final String ADMIN = "00000000-0000-0000-0000-000000000001";
     private static final Instant NOW = Instant.parse("2026-10-16T00:00:00Z");
     @TempDir Path tempDir;
 
@@ -83,6 +85,49 @@ class DisputeEvidenceServiceTest {
     @Test
     void webpDecoderIsAvailable() {
         assertTrue(ImageIO.getImageReadersByFormatName("WebP").hasNext());
+    }
+
+    @Test
+    void adminUploadRecordsParticipantSourceAndRejectsMissingSource() throws Exception {
+        DisputeService disputes = mock(DisputeService.class);
+        DisputeEvidenceRepository repo = mock(DisputeEvidenceRepository.class);
+        when(disputes.requireEvidenceAccess(DISPUTE, ADMIN, true, true)).thenReturn(dispute());
+        when(disputes.requireEvidenceSource(dispute(), ACTOR)).thenReturn(ACTOR);
+        when(disputes.requireEvidenceSource(dispute(), null))
+                .thenThrow(new IllegalArgumentException("Source required."));
+        DisputeEvidenceService service = service(disputes, repo, 5 * 1024 * 1024);
+        var image = new MockMultipartFile("file", "proof.png", "image/png", png());
+        assertThrows(IllegalArgumentException.class,
+                () -> service.upload(DISPUTE, ADMIN, true, image, "email photo", null));
+        service.upload(DISPUTE, ADMIN, true, image, "email photo", ACTOR);
+        ArgumentCaptor<DisputeEvidence> saved = ArgumentCaptor.forClass(DisputeEvidence.class);
+        verify(repo).insert(saved.capture());
+        assertEquals(ADMIN, saved.getValue().uploaderId());
+        assertEquals(ACTOR, saved.getValue().sourceAccountId());
+    }
+
+    @Test
+    void listPaginatesOnlyAuthorizedMetadataWithoutStorageKey() {
+        DisputeService disputes = mock(DisputeService.class);
+        DisputeEvidenceRepository repo = mock(DisputeEvidenceRepository.class);
+        when(disputes.requireEvidenceAccess(DISPUTE, ACTOR, false, false)).thenReturn(dispute());
+        DisputeEvidenceService service = service(disputes, repo, 5 * 1024 * 1024);
+        String firstId = UUID.randomUUID().toString();
+        String secondId = UUID.randomUUID().toString();
+        DisputeEvidence first = new DisputeEvidence(firstId, DISPUTE, ADMIN, ACTOR,
+                UUID.randomUUID().toString(), "image/png", 72, "digest", "proof", NOW, NOW);
+        DisputeEvidence second = new DisputeEvidence(secondId, DISPUTE, ACTOR, null,
+                UUID.randomUUID().toString(), "image/png", 73, "digest", "reply",
+                NOW.minusSeconds(1), NOW.minusSeconds(1));
+        when(repo.findPage(DISPUTE, null, null, 2)).thenReturn(List.of(first, second));
+        var page = service.list(DISPUTE, ACTOR, false, null, 1);
+        assertEquals(firstId, page.items().get(0).evidenceId());
+        assertEquals(ACTOR, page.items().get(0).sourceAccountId());
+        assertTrue(page.nextCursor() != null);
+        when(repo.findPage(DISPUTE, NOW, firstId, 2)).thenReturn(List.of(second));
+        var next = service.list(DISPUTE, ACTOR, false, page.nextCursor(), 1);
+        assertEquals(secondId, next.items().get(0).evidenceId());
+        assertEquals(null, next.nextCursor());
     }
 
     @Test

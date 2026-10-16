@@ -37,8 +37,18 @@ public class LearningEvidenceController {
             @RequestParam String actorId,
             @RequestParam(defaultValue = "false") boolean asAdmin,
             @RequestParam("file") MultipartFile file,
-            @RequestParam(required = false) String description) {
-        return evidence.upload(disputeId, actorId, asAdmin, file, description);
+            @RequestParam(required = false) String description,
+            @RequestParam(required = false) String sourceAccountId) {
+        return evidence.upload(disputeId, actorId, asAdmin, file, description, sourceAccountId);
+    }
+
+    @GetMapping("/evidence")
+    public DisputeEvidenceService.EvidencePage listEvidence(@PathVariable String disputeId,
+            @RequestParam String actorId,
+            @RequestParam(defaultValue = "false") boolean asAdmin,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(required = false) Integer limit) {
+        return evidence.list(disputeId, actorId, asAdmin, cursor, limit);
     }
 
     @GetMapping("/evidence/{evidenceId}")
