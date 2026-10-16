@@ -13,10 +13,13 @@ import vn.ptit.soa.payment.contract.ContractRepository;
 public class DisputeReadService {
     private final ContractRepository contracts;
     private final DisputeRepository disputes;
+    private final AdminDisputeFilingRepository filings;
 
-    public DisputeReadService(ContractRepository contracts, DisputeRepository disputes) {
+    public DisputeReadService(ContractRepository contracts, DisputeRepository disputes,
+            AdminDisputeFilingRepository filings) {
         this.contracts = contracts;
         this.disputes = disputes;
+        this.filings = filings;
     }
 
     // Learning-only: production must derive actor and role from verified JWT/access-state.
@@ -45,11 +48,14 @@ public class DisputeReadService {
             throw new DisputeReadNotFoundException();
         }
         DisputeDecision decision = disputes.findDecisionForDispute(dispute.disputeId()).orElse(null);
+        AdminDisputeFilingRepository.Filing filing = asAdmin
+                ? filings.find(dispute.disputeId()).orElse(null) : null;
         return new DisputeDetail(dispute.disputeId(), dispute.contractId(), dispute.openedBy(),
                 dispute.reasonCode(), dispute.description(), dispute.status(),
                 dispute.depositHold(), dispute.assignedAdminId(), dispute.responseDueAt(),
                 dispute.resolvedAt(), dispute.outcome(), dispute.stateVersion(),
-                dispute.decisionVersion(), dispute.createdAt(), dispute.updatedAt(), decision);
+                dispute.decisionVersion(), dispute.createdAt(), dispute.updatedAt(), decision,
+                filing);
     }
 
     private boolean participant(Contract contract, String actor) {
@@ -80,5 +86,6 @@ public class DisputeReadService {
             String reasonCode, String description, String status, boolean depositHold,
             String assignedAdminId, Instant responseDueAt, Instant resolvedAt,
             String outcome, long stateVersion, long decisionVersion, Instant createdAt,
-            Instant updatedAt, DisputeDecision decision) {}
+            Instant updatedAt, DisputeDecision decision,
+            AdminDisputeFilingRepository.Filing adminFiling) {}
 }

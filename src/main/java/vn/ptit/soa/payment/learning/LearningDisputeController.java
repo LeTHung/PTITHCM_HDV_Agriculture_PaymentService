@@ -17,6 +17,7 @@ import vn.ptit.soa.payment.dispute.DisputeService;
 import vn.ptit.soa.payment.dispute.AdminDisputeListService;
 import vn.ptit.soa.payment.dispute.DisputeReadService;
 import vn.ptit.soa.payment.dispute.AdminCompletionService;
+import vn.ptit.soa.payment.dispute.AdminDisputeFilingService;
 
 @RestController
 @Profile("learning & database-learning")
@@ -26,13 +27,16 @@ public class LearningDisputeController {
     private final AdminDisputeListService adminList;
     private final DisputeReadService reads;
     private final AdminCompletionService adminCompletion;
+    private final AdminDisputeFilingService adminFiling;
 
     public LearningDisputeController(DisputeService disputes, AdminDisputeListService adminList,
-            DisputeReadService reads, AdminCompletionService adminCompletion) {
+            DisputeReadService reads, AdminCompletionService adminCompletion,
+            AdminDisputeFilingService adminFiling) {
         this.disputes = disputes;
         this.adminList = adminList;
         this.reads = reads;
         this.adminCompletion = adminCompletion;
+        this.adminFiling = adminFiling;
     }
 
     @PostMapping("/contracts/{contractId}/disputes")
@@ -40,6 +44,14 @@ public class LearningDisputeController {
     public Dispute open(@PathVariable String contractId, @RequestBody OpenRequest request) {
         return disputes.open(contractId, request.actorId(), request.reasonCode(),
                 request.description(), request.evidenceRefs());
+    }
+
+    @PostMapping("/admin/contracts/{contractId}/disputes")
+    @ResponseStatus(HttpStatus.CREATED)
+    public Dispute openForAdmin(@PathVariable String contractId,
+            @RequestBody AdminOpenRequest request) {
+        return adminFiling.open(contractId, request.adminId(), request.onBehalfOfAccountId(),
+                request.reasonCode(), request.description(), request.verificationNote());
     }
 
     @GetMapping("/disputes/{disputeId}")
@@ -86,6 +98,8 @@ public class LearningDisputeController {
 
     public record OpenRequest(String actorId, String reasonCode, String description,
             List<String> evidenceRefs) {}
+    public record AdminOpenRequest(String adminId, String onBehalfOfAccountId,
+            String reasonCode, String description, String verificationNote) {}
 
     public record ReviewRequest(String adminId, String note, Long expectedVersion) {}
 

@@ -24,7 +24,8 @@ class DisputeReadServiceTest {
     private static final Instant NOW = Instant.parse("2026-10-16T00:00:00Z");
     private final ContractRepository contracts = mock(ContractRepository.class);
     private final DisputeRepository disputes = mock(DisputeRepository.class);
-    private final DisputeReadService reads = new DisputeReadService(contracts, disputes);
+    private final AdminDisputeFilingRepository filings = mock(AdminDisputeFilingRepository.class);
+    private final DisputeReadService reads = new DisputeReadService(contracts, disputes, filings);
 
     @BeforeEach
     void setUp() {
@@ -49,8 +50,13 @@ class DisputeReadServiceTest {
         DisputeDecision decision = new DisputeDecision(ADMIN, DISPUTE, ADMIN, 2,
                 "NO_VIOLATION", "NONE", "checked", List.of());
         when(disputes.findDecisionForDispute(DISPUTE)).thenReturn(Optional.of(decision));
+        AdminDisputeFilingRepository.Filing filing = new AdminDisputeFilingRepository.Filing(
+                DISPUTE, ADMIN, FARMER, "Verified registered email", NOW);
+        when(filings.find(DISPUTE)).thenReturn(Optional.of(filing));
         assertEquals(decision, reads.dispute(DISPUTE, TRADER, false).decision());
         assertEquals(decision, reads.dispute(DISPUTE, ADMIN, true).decision());
+        assertNull(reads.dispute(DISPUTE, TRADER, false).adminFiling());
+        assertEquals(filing, reads.dispute(DISPUTE, ADMIN, true).adminFiling());
         assertThrows(DisputeReadNotFoundException.class,
                 () -> reads.dispute(DISPUTE, ADMIN, false));
         assertThrows(DisputeReadNotFoundException.class,
