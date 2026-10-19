@@ -19,15 +19,18 @@ public class DecisionReversalService {
     private final DisputeEvidenceRepository evidence;
     private final ContractRepository contracts;
     private final Clock clock;
+    private final ReputationDecisionOutboxRepository reputationOutbox;
 
     public DecisionReversalService(DisputeRepository disputes,
             DecisionReversalRepository reversals, DisputeEvidenceRepository evidence,
-            ContractRepository contracts, Clock clock) {
+            ContractRepository contracts, ReputationDecisionOutboxRepository reputationOutbox,
+            Clock clock) {
         this.disputes = disputes;
         this.reversals = reversals;
         this.evidence = evidence;
         this.contracts = contracts;
         this.clock = clock;
+        this.reputationOutbox = reputationOutbox;
     }
 
     @Transactional
@@ -84,6 +87,7 @@ public class DecisionReversalService {
                 current.disputeId(), admin, reason.trim(), refs, now);
         reversals.insert(reversal);
         disputes.recordReversal(current.disputeId(), current.decisionVersion(), now);
+        reputationOutbox.reversePenalty(contract, reversal, current.decisionVersion() + 1);
         return reversal;
     }
 

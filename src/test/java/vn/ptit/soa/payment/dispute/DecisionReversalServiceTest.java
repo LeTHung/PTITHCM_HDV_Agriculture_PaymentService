@@ -33,6 +33,7 @@ class DecisionReversalServiceTest {
     private DecisionReversalRepository reversals;
     private DisputeEvidenceRepository evidence;
     private DecisionReversalService service;
+    private ReputationDecisionOutboxRepository reputationOutbox;
 
     @BeforeEach
     void setUp() {
@@ -40,8 +41,9 @@ class DecisionReversalServiceTest {
         reversals = mock(DecisionReversalRepository.class);
         evidence = mock(DisputeEvidenceRepository.class);
         ContractRepository contracts = mock(ContractRepository.class);
+        reputationOutbox = mock(ReputationDecisionOutboxRepository.class);
         service = new DecisionReversalService(disputes, reversals, evidence, contracts,
-                Clock.fixed(NOW, ZoneOffset.UTC));
+                reputationOutbox, Clock.fixed(NOW, ZoneOffset.UTC));
         DisputeDecision original = new DisputeDecision(ORIGINAL, DISPUTE, ADMIN1, 2,
                 "FARMER_VIOLATION", "REFUND_TO_TRADER", "Prior reason", List.of(EVIDENCE));
         Dispute dispute = new Dispute(DISPUTE, CONTRACT, FARMER, "DELIVERY", "Details",
@@ -64,6 +66,8 @@ class DecisionReversalServiceTest {
         assertEquals(ADMIN2, result.adminId());
         verify(reversals).insert(result);
         verify(disputes).recordReversal(DISPUTE, 1, NOW);
+        verify(reputationOutbox).reversePenalty(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq(result), org.mockito.ArgumentMatchers.eq(2L));
     }
 
     @Test
@@ -73,6 +77,7 @@ class DecisionReversalServiceTest {
         assertThrows(IllegalArgumentException.class, () -> service.reverse(
                 ORIGINAL, REVERSAL, ADMIN2, "Corrected", List.of()));
         verify(disputes, never()).recordReversal(DISPUTE, 1, NOW);
+        org.mockito.Mockito.verifyNoInteractions(reputationOutbox);
     }
 
     @Test
@@ -85,5 +90,6 @@ class DecisionReversalServiceTest {
         assertThrows(IllegalStateException.class, () -> service.reverse(ORIGINAL, REVERSAL,
                 ADMIN2, "Different", List.of(EVIDENCE)));
         verify(disputes, never()).recordReversal(DISPUTE, 1, NOW);
+        org.mockito.Mockito.verifyNoInteractions(reputationOutbox);
     }
 }

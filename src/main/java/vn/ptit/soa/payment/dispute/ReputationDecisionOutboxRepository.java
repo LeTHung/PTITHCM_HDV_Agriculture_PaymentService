@@ -42,6 +42,50 @@ public class ReputationDecisionOutboxRepository {
         data.put("requestedDelta", points.negate());
         data.put("reasonCode", violationCode);
         data.put("effectiveAt", now.toString());
+        save(contract, liableAccountId, adminId, now, data);
+    }
+
+    public void reversePenalty(Contract contract, DecisionReversal reversal,
+            long decisionVersion) {
+        var originals = jdbc.query("""
+                SELECT event_key::text,payload->'data'->>'violationCode',
+                       (payload->'data'->>'requestedDelta')::numeric
+                FROM learning.outbox
+                WHERE topic=? AND aggregate_id=?::uuid
+                  AND payload->'data'->>'decisionId'=?
+                  AND payload->'data'->>'action'='PENALTY'
+                """, (rs, row) -> new OriginalPenalty(rs.getString(1), rs.getString(2),
+                        rs.getBigDecimal(3)), TOPIC, contract.contractId(),
+                reversal.originalDecisionId());
+        if (originals.isEmpty()) return; // Historical decisions without a producer event are audit-only.
+        if (originals.size() != 1) throw new IllegalStateException("Ambiguous original penalty event.");
+        OriginalPenalty original = originals.getFirst();
+        String account = original.accountId();
+        if (!account.equals(contract.farmerId()) && !account.equals(contract.traderId())) {
+            throw new IllegalStateException("Original penalty account does not belong to Contract.");
+        }
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("decisionId", reversal.reversalDecisionId());
+        data.put("decisionVersion", decisionVersion);
+        data.put("originalDecisionId", reversal.originalDecisionId());
+        data.put("contractId", contract.contractId());
+        data.put("accountId", account);
+        data.put("counterpartyId", account.equals(contract.farmerId())
+                ? contract.traderId() : contract.farmerId());
+        data.put("action", "REVERSAL");
+        data.put("violationCode", original.violationCode());
+        // Requested only: User must reverse its saved actualDelta, not apply this amount blindly.
+        data.put("requestedDelta", original.requestedDelta().negate());
+        data.put("reasonCode", "DECISION_REVERSED");
+        data.put("effectiveAt", reversal.createdAt().toString());
+        save(contract, account, reversal.adminId(), reversal.createdAt(), data);
+    }
+
+    private record OriginalPenalty(String accountId, String violationCode,
+            BigDecimal requestedDelta) {}
+
+    private void save(Contract contract, String accountId, String adminId, Instant now,
+            Map<String, Object> data) {
         String eventId = UUID.randomUUID().toString();
         Map<String, Object> envelope = new LinkedHashMap<>();
         envelope.put("eventId", eventId);
@@ -50,7 +94,7 @@ public class ReputationDecisionOutboxRepository {
         envelope.put("sourceService", "payment-service");
         envelope.put("occurredAt", now.toString());
         envelope.put("actorId", adminId);
-        envelope.put("recipientIds", List.of(liableAccountId));
+        envelope.put("recipientIds", List.of(accountId));
         envelope.put("referenceType", "CONTRACT");
         envelope.put("referenceId", contract.contractId());
         envelope.put("data", data);
@@ -60,7 +104,7 @@ public class ReputationDecisionOutboxRepository {
                     (event_id,event_type,aggregate_id,topic,event_key,payload,created_at)
                     VALUES (?::uuid,?,?::uuid,?,?::uuid,?::jsonb,?)
                     """, eventId, "CONTRACT_REPUTATION_DECIDED", contract.contractId(),
-                    TOPIC, liableAccountId, json.writeValueAsString(envelope), Timestamp.from(now));
+                    TOPIC, accountId, json.writeValueAsString(envelope), Timestamp.from(now));
         } catch (JsonProcessingException invalid) {
             throw new IllegalStateException("Cannot serialize reputation decision event.", invalid);
         }
