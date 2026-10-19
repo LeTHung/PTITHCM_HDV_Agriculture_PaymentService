@@ -125,6 +125,19 @@ public class PaymentTrackingRepository {
         if (changed != 1) throw new IllegalStateException("Deposit hold could not be changed.");
     }
 
+    public void settleDispute(String contractId, String status, long stateVersion, Instant now) {
+        if (!("FORFEITED".equals(status) || "REFUNDED".equals(status))) {
+            throw new IllegalArgumentException("Unsupported deposit settlement.");
+        }
+        int changed = jdbc.update("""
+                UPDATE learning.payment_tracking
+                SET status=?,dispute_hold=false,state_version=?,updated_at=?
+                WHERE contract_id=?::uuid AND status IN ('LOCKED','RELEASABLE')
+                  AND dispute_hold=true
+                """, status, stateVersion, Timestamp.from(now), contractId);
+        if (changed != 1) throw new IllegalStateException("Deposit was not settled.");
+    }
+
     private PaymentTracking map(java.sql.ResultSet rs, int row) throws java.sql.SQLException {
         return new PaymentTracking(rs.getString("payment_tracking_id"),
                         rs.getString("contract_id"), rs.getBigDecimal("deposit_rate"),

@@ -18,6 +18,7 @@ import vn.ptit.soa.payment.dispute.AdminDisputeListService;
 import vn.ptit.soa.payment.dispute.DisputeReadService;
 import vn.ptit.soa.payment.dispute.AdminCompletionService;
 import vn.ptit.soa.payment.dispute.AdminDisputeFilingService;
+import vn.ptit.soa.payment.dispute.DisputeSettlementService;
 
 @RestController
 @Profile("learning & database-learning")
@@ -28,15 +29,17 @@ public class LearningDisputeController {
     private final DisputeReadService reads;
     private final AdminCompletionService adminCompletion;
     private final AdminDisputeFilingService adminFiling;
+    private final DisputeSettlementService settlement;
 
     public LearningDisputeController(DisputeService disputes, AdminDisputeListService adminList,
             DisputeReadService reads, AdminCompletionService adminCompletion,
-            AdminDisputeFilingService adminFiling) {
+            AdminDisputeFilingService adminFiling, DisputeSettlementService settlement) {
         this.disputes = disputes;
         this.adminList = adminList;
         this.reads = reads;
         this.adminCompletion = adminCompletion;
         this.adminFiling = adminFiling;
+        this.settlement = settlement;
     }
 
     @PostMapping("/contracts/{contractId}/disputes")
@@ -84,6 +87,16 @@ public class LearningDisputeController {
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @RequestBody SafeDecisionRequest request) {
         return disputes.closeSafely(disputeId, request.decisionId(), idempotencyKey,
+                request.adminId(), request.expectedVersion(), request.outcome(),
+                request.depositDisposition(), request.reason(), request.evidenceRefs(),
+                request.liableAccountId(), request.violationCode(), request.penaltyPoints());
+    }
+
+    @PostMapping("/admin/disputes/{disputeId}/settlement-decisions")
+    public Dispute settle(@PathVariable String disputeId,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @RequestBody SafeDecisionRequest request) {
+        return settlement.settle(disputeId, request.decisionId(), idempotencyKey,
                 request.adminId(), request.expectedVersion(), request.outcome(),
                 request.depositDisposition(), request.reason(), request.evidenceRefs(),
                 request.liableAccountId(), request.violationCode(), request.penaltyPoints());
