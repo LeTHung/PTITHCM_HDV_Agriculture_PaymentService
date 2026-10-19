@@ -2,6 +2,7 @@ package vn.ptit.soa.payment.security;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbusds.jose.JWSAlgorithm;
@@ -87,6 +88,8 @@ class PaymentSecurityTest {
                     .decode(token(pair, "first", "urn:soa:user-service", "soa-api", ACCOUNT));
             UserAccessStateClient client = new UserAccessStateClient(new ObjectMapper(),
                     "http://127.0.0.1:" + server.getAddress().getPort(), "payment-test-key", 1000);
+            assertThrows(UserAccessStateClient.AccountForbiddenException.class,
+                    () -> client.requireActiveParticipantOrAdmin(mock(Jwt.class)));
             assertDoesNotThrow(() -> client.requireActiveParticipant(jwt));
             mode.set(1);
             assertThrows(UserAccessStateClient.AccountForbiddenException.class, () -> client.requireActiveParticipant(jwt));

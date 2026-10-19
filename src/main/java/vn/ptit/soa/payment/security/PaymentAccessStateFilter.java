@@ -26,13 +26,19 @@ final class PaymentAccessStateFilter extends OncePerRequestFilter {
         String path = request.getRequestURI().substring(request.getContextPath().length());
         boolean protectedRead = "GET".equals(request.getMethod())
                 && (path.equals("/api/v1/payments/deposits")
-                || path.matches("/api/v1/payments/(?:contracts|deposits)/[^/]+"));
+                || path.matches("/api/v1/payments/(?:contracts|deposits|disputes)/[^/]+"));
         boolean protectedWrite = "POST".equals(request.getMethod())
-                && path.matches("/api/v1/payments/(?:contracts/[^/]+/complete|deposits/[^/]+/release)");
+                && path.matches("/api/v1/payments/(?:contracts/[^/]+/(?:complete|disputes)"
+                        + "|deposits/[^/]+/release|disputes/[^/]+/responses)");
         if ((protectedRead || protectedWrite)
                 && SecurityContextHolder.getContext().getAuthentication() instanceof JwtAuthenticationToken jwt) {
             try {
-                access.requireActiveParticipant(jwt.getToken());
+                if ("GET".equals(request.getMethod())
+                        && path.matches("/api/v1/payments/disputes/[^/]+")) {
+                    access.requireActiveParticipantOrAdmin(jwt.getToken());
+                } else {
+                    access.requireActiveParticipant(jwt.getToken());
+                }
             } catch (UserAccessStateClient.AccountForbiddenException denied) {
                 PaymentSecurityConfig.writeError(json, response, request.getRequestURI(),
                         HttpStatus.FORBIDDEN, "ACCOUNT_NOT_ACTIVE", "Account is not active or not a participant.");

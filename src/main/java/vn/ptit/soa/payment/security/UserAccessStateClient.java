@@ -6,6 +6,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -35,8 +36,16 @@ public class UserAccessStateClient {
     }
 
     public void requireActiveParticipant(Jwt jwt) {
+        requireActiveRole(jwt, Set.of("FARMER", "TRADER"));
+    }
+
+    public void requireActiveParticipantOrAdmin(Jwt jwt) {
+        requireActiveRole(jwt, Set.of("FARMER", "TRADER", "ADMIN"));
+    }
+
+    private void requireActiveRole(Jwt jwt, Set<String> roles) {
         String role = jwt.getClaimAsString("role");
-        if (!"FARMER".equals(role) && !"TRADER".equals(role)) throw new AccountForbiddenException();
+        if (role == null || !roles.contains(role)) throw new AccountForbiddenException();
         HttpRequest request = HttpRequest.newBuilder(baseUrl.resolve("internal/v1/accounts/" + jwt.getSubject() + "/access-state"))
                 .header("X-Service-Key", serviceKey).header("Accept", "application/json")
                 .timeout(timeout).GET().build();
