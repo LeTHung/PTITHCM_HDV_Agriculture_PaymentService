@@ -2,6 +2,7 @@ package vn.ptit.soa.payment.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.DispatcherType;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.Map;
@@ -39,9 +40,13 @@ public class PaymentSecurityConfig {
         return http.csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .addFilterAfter(new PaymentAccessStateFilter(access, json), BearerTokenAuthenticationFilter.class)
-                .authorizeHttpRequests(auth -> auth.requestMatchers("/health").permitAll()
+                .authorizeHttpRequests(auth -> auth.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
+                        .requestMatchers("/health").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/payments/contracts/*", "/api/v1/payments/deposits",
                                 "/api/v1/payments/deposits/*")
+                        .authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/payments/contracts/*/complete",
+                                "/api/v1/payments/deposits/*/release")
                         .authenticated()
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth -> oauth.jwt(Customizer.withDefaults())

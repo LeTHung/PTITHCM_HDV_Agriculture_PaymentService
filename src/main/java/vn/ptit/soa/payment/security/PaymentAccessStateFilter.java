@@ -24,8 +24,12 @@ final class PaymentAccessStateFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         String path = request.getRequestURI().substring(request.getContextPath().length());
-        if ("GET".equals(request.getMethod()) && (path.equals("/api/v1/payments/deposits")
-                || path.matches("/api/v1/payments/(?:contracts|deposits)/[^/]+"))
+        boolean protectedRead = "GET".equals(request.getMethod())
+                && (path.equals("/api/v1/payments/deposits")
+                || path.matches("/api/v1/payments/(?:contracts|deposits)/[^/]+"));
+        boolean protectedWrite = "POST".equals(request.getMethod())
+                && path.matches("/api/v1/payments/(?:contracts/[^/]+/complete|deposits/[^/]+/release)");
+        if ((protectedRead || protectedWrite)
                 && SecurityContextHolder.getContext().getAuthentication() instanceof JwtAuthenticationToken jwt) {
             try {
                 access.requireActiveParticipant(jwt.getToken());

@@ -12,7 +12,7 @@ import vn.ptit.soa.payment.contract.DepositNotFoundException;
 import vn.ptit.soa.payment.dispute.DisputeReadNotFoundException;
 
 @Profile("secure")
-@RestControllerAdvice(basePackageClasses = SecurePaymentReadController.class)
+@RestControllerAdvice(basePackages = "vn.ptit.soa.payment.security")
 public class SecurePaymentExceptionHandler {
     @ExceptionHandler({DepositNotFoundException.class, DisputeReadNotFoundException.class})
     public ResponseEntity<Map<String, Object>> notFound(HttpServletRequest request) {
@@ -22,6 +22,17 @@ public class SecurePaymentExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, Object>> invalidId(HttpServletRequest request) {
         return error(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "ID must be a UUID.", request);
+    }
+
+    @ExceptionHandler(PaymentActionForbiddenException.class)
+    public ResponseEntity<Map<String, Object>> forbidden(HttpServletRequest request) {
+        return error(HttpStatus.FORBIDDEN, "FORBIDDEN", "This account cannot perform the action.", request);
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Map<String, Object>> conflict(IllegalStateException exception,
+            HttpServletRequest request) {
+        return error(HttpStatus.CONFLICT, "CONFLICT", exception.getMessage(), request);
     }
 
     private ResponseEntity<Map<String, Object>> error(HttpStatus status, String code,
