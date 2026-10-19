@@ -30,7 +30,7 @@ public class AdminDisputeFilingService {
         this.clock = clock;
     }
 
-    // Learning-only: production must verify the Admin JWT/access-state and email identity manually.
+    // The caller authenticates Admin; an operator must verify identity outside this service.
     @Transactional
     public Dispute open(String contractId, String adminId, String onBehalfOfAccountId,
             String reasonCode, String description, String verificationNote) {
@@ -41,7 +41,7 @@ public class AdminDisputeFilingService {
         String details = required(description, "description", 5000);
         String verification = required(verificationNote, "verificationNote", 5000);
         Contract contract = contracts.findByIdForUpdate(id)
-                .orElseThrow(() -> new IllegalArgumentException("Contract does not exist."));
+                .orElseThrow(DisputeReadNotFoundException::new);
         if (!participant.equals(contract.farmerId()) && !participant.equals(contract.traderId())) {
             throw new IllegalArgumentException("The represented account must participate in this Contract.");
         }

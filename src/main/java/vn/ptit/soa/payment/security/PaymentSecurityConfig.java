@@ -55,6 +55,7 @@ public class PaymentSecurityConfig {
                                 "/api/v1/payments/disputes/*/evidence",
                                 "/api/v1/payments/admin/disputes/*/review",
                                 "/api/v1/payments/admin/disputes/*/decisions",
+                                "/api/v1/payments/admin/contracts/*/disputes",
                                 "/api/v1/payments/admin/decisions/*/reversal")
                         .authenticated()
                         .anyRequest().denyAll())
