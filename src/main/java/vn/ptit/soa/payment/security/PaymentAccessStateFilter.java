@@ -26,15 +26,20 @@ final class PaymentAccessStateFilter extends OncePerRequestFilter {
         String path = request.getRequestURI().substring(request.getContextPath().length());
         boolean protectedRead = "GET".equals(request.getMethod())
                 && (path.equals("/api/v1/payments/deposits")
+                || path.equals("/api/v1/payments/admin/disputes")
                 || path.matches("/api/v1/payments/(?:contracts|deposits|disputes)/[^/]+")
                 || path.matches("/api/v1/payments/disputes/[^/]+/evidence(?:/[^/]+)?"));
         boolean protectedWrite = "POST".equals(request.getMethod())
                 && path.matches("/api/v1/payments/(?:contracts/[^/]+/(?:complete|disputes)"
-                        + "|deposits/[^/]+/release|disputes/[^/]+/(?:responses|evidence))");
+                        + "|deposits/[^/]+/release|disputes/[^/]+/(?:responses|evidence)"
+                        + "|admin/disputes/[^/]+/review)");
         if ((protectedRead || protectedWrite)
                 && SecurityContextHolder.getContext().getAuthentication() instanceof JwtAuthenticationToken jwt) {
             try {
-                if (path.matches("/api/v1/payments/disputes/[^/]+/evidence(?:/[^/]+)?")
+                if (path.equals("/api/v1/payments/admin/disputes")
+                        || path.matches("/api/v1/payments/admin/disputes/[^/]+/review")) {
+                    access.requireActiveAdmin(jwt.getToken());
+                } else if (path.matches("/api/v1/payments/disputes/[^/]+/evidence(?:/[^/]+)?")
                         || ("GET".equals(request.getMethod())
                         && path.matches("/api/v1/payments/disputes/[^/]+"))) {
                     access.requireActiveParticipantOrAdmin(jwt.getToken());

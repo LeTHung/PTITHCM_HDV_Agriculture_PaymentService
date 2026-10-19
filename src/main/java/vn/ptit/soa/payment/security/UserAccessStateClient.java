@@ -43,6 +43,10 @@ public class UserAccessStateClient {
         requireActiveRole(jwt, Set.of("FARMER", "TRADER", "ADMIN"));
     }
 
+    public void requireActiveAdmin(Jwt jwt) {
+        requireActiveRole(jwt, Set.of("ADMIN"));
+    }
+
     private void requireActiveRole(Jwt jwt, Set<String> roles) {
         String role = jwt.getClaimAsString("role");
         if (role == null || !roles.contains(role)) throw new AccountForbiddenException();
