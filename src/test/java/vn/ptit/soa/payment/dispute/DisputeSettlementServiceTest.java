@@ -2,6 +2,7 @@ package vn.ptit.soa.payment.dispute;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -39,6 +40,7 @@ class DisputeSettlementServiceTest {
     private ContractRepository contracts;
     private PaymentTrackingRepository tracking;
     private DisputeSettlementService service;
+    private ReputationDecisionOutboxRepository reputationOutbox;
 
     @BeforeEach
     void setUp() {
@@ -47,9 +49,11 @@ class DisputeSettlementServiceTest {
         settlements = mock(DisputeSettlementRepository.class);
         contracts = mock(ContractRepository.class);
         tracking = mock(PaymentTrackingRepository.class);
+        reputationOutbox = mock(ReputationDecisionOutboxRepository.class);
         service = new DisputeSettlementService(disputes, evidence, settlements,
                 contracts, tracking, mock(ContractOutboxRepository.class),
-                mock(DepositOutboxRepository.class), Clock.fixed(NOW, ZoneOffset.UTC));
+                mock(DepositOutboxRepository.class), reputationOutbox,
+                Clock.fixed(NOW, ZoneOffset.UTC));
         Contract contract = new Contract(CONTRACT, "202fe3fd-626a-41c8-80fd-70af82c1f256",
                 "f72a08bd-33d7-4221-9e55-55d5d7f2e2f0", FARMER, TRADER,
                 new BigDecimal("10000010.00"), "Terms", NOW.plusSeconds(86400),
@@ -76,17 +80,21 @@ class DisputeSettlementServiceTest {
                 eq("F04"), eq(new BigDecimal("3.0")), eq(TRADER), eq("REFUND_TO_TRADER"),
                 eq(new BigDecimal("500001.00")), eq(new BigDecimal("20.00")),
                 eq(new BigDecimal("100000.20")), eq(NOW));
+        verify(reputationOutbox).penalty(any(), eq(DECISION), eq(1L), eq(FARMER),
+                eq("F04"), eq(new BigDecimal("3.0")), eq(ADMIN), eq(NOW));
     }
 
     @Test
     void traderViolationForfeitsWithoutFarmerPenalty() {
         service.settle(DISPUTE, DECISION, DECISION, ADMIN, 2, "TRADER_VIOLATION",
-                "FORFEIT_TO_FARMER", "Verified", List.of(EVIDENCE), TRADER, null, null);
+                "FORFEIT_TO_FARMER", "Verified", List.of(EVIDENCE), TRADER, "T04", "3.0");
         verify(tracking).settleDispute(CONTRACT, "FORFEITED", 3, NOW);
         verify(settlements).insert(eq(DECISION), any(), eq(CONTRACT), eq(ADMIN), eq(TRADER),
-                eq(null), eq(null), eq(FARMER), eq("FORFEIT_TO_FARMER"),
+                eq("T04"), eq(new BigDecimal("3.0")), eq(FARMER), eq("FORFEIT_TO_FARMER"),
                 eq(new BigDecimal("500001.00")), eq(BigDecimal.ZERO),
                 eq(new BigDecimal("0.00")), eq(NOW));
+        verify(reputationOutbox).penalty(any(), eq(DECISION), eq(1L), eq(TRADER),
+                eq("T04"), eq(new BigDecimal("3.0")), eq(ADMIN), eq(NOW));
     }
 
     @Test
@@ -95,9 +103,11 @@ class DisputeSettlementServiceTest {
                 .thenReturn(Optional.of(deposit("RELEASED")));
         assertThrows(IllegalStateException.class, () -> service.settle(DISPUTE, DECISION,
                 DECISION, ADMIN, 2, "FARMER_VIOLATION", "REFUND_TO_TRADER",
-                "Verified", List.of(EVIDENCE), FARMER, null, null));
+                "Verified", List.of(EVIDENCE), FARMER, "F04", "3.0"));
         verify(settlements, never()).insert(any(), any(), any(), any(), any(),
                 any(), any(), any(), any(), any(), any(), any(), any());
+        verify(reputationOutbox, never()).penalty(any(), any(), anyLong(),
+                any(), any(), any(), any(), any());
     }
 
     @Test
@@ -108,6 +118,35 @@ class DisputeSettlementServiceTest {
         assertThrows(IllegalArgumentException.class, () -> service.settle(DISPUTE, DECISION,
                 DECISION, ADMIN, 2, "FARMER_VIOLATION", "REFUND_TO_TRADER",
                 "Verified", List.of(EVIDENCE), TRADER, null, null));
+    }
+
+    @Test
+    void wrongOrMissingReputationPenaltyIsRejectedBeforeSettlement() {
+        assertThrows(IllegalArgumentException.class, () -> service.settle(DISPUTE, DECISION,
+                DECISION, ADMIN, 2, "FARMER_VIOLATION", "REFUND_TO_TRADER",
+                "Verified", List.of(EVIDENCE), FARMER, "F04", "2.0"));
+        assertThrows(IllegalArgumentException.class, () -> service.settle(DISPUTE, DECISION,
+                DECISION, ADMIN, 2, "TRADER_VIOLATION", "FORFEIT_TO_FARMER",
+                "Verified", List.of(EVIDENCE), TRADER, null, null));
+        assertThrows(IllegalArgumentException.class, () -> service.settle(DISPUTE, DECISION,
+                DECISION, ADMIN, 2, "TRADER_VIOLATION", "FORFEIT_TO_FARMER",
+                "Verified", List.of(EVIDENCE), TRADER, "F04", "3.0"));
+        verify(reputationOutbox, never()).penalty(any(), any(), anyLong(),
+                any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void numericFormattingOnRetryDoesNotCreateAnotherPenalty() {
+        when(disputes.findDecision(DECISION)).thenReturn(Optional.of(new DisputeDecision(
+                DECISION, DISPUTE, ADMIN, 2, "FARMER_VIOLATION", "REFUND_TO_TRADER",
+                "Verified", List.of(EVIDENCE))));
+        when(settlements.findTerms(DECISION)).thenReturn(Optional.of(
+                new DisputeSettlementRepository.SettlementTerms(FARMER, "F04",
+                        new BigDecimal("3.0"))));
+        service.settle(DISPUTE, DECISION, DECISION, ADMIN, 2, "FARMER_VIOLATION",
+                "REFUND_TO_TRADER", "Verified", List.of(EVIDENCE), FARMER, "F04", "3");
+        verify(reputationOutbox, never()).penalty(any(), any(), anyLong(),
+                any(), any(), any(), any(), any());
     }
 
     @Test

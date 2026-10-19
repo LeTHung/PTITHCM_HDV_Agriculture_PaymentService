@@ -50,16 +50,16 @@ class SecurePaymentAdminDecisionControllerTest {
         var controller = new SecurePaymentAdminDecisionController(
                 mock(DisputeReadService.class), mock(DisputeService.class), settlements);
         var request = new SecurePaymentAdminDecisionController.DecisionRequest(DECISION, 2,
-                "FARMER_VIOLATION", FARMER, "F04", "2.0", "REFUND_TO_TRADER",
+                "FARMER_VIOLATION", FARMER, "F04", "3.0", "REFUND_TO_TRADER",
                 "Wrong delivery", List.of(EVIDENCE));
         when(settlements.settle(DISPUTE, DECISION, DECISION, ADMIN, 2,
                 "FARMER_VIOLATION", "REFUND_TO_TRADER", request.reason(),
-                List.of(EVIDENCE), FARMER, "F04", "2.0")).thenReturn(resolved());
+                List.of(EVIDENCE), FARMER, "F04", "3.0")).thenReturn(resolved());
         assertEquals("RESOLVED", controller.decide(DISPUTE, DECISION, request,
                 jwt(ADMIN, "ADMIN")).status());
         verify(settlements).settle(DISPUTE, DECISION, DECISION, ADMIN, 2,
                 "FARMER_VIOLATION", "REFUND_TO_TRADER", request.reason(),
-                List.of(EVIDENCE), FARMER, "F04", "2.0");
+                List.of(EVIDENCE), FARMER, "F04", "3.0");
     }
 
     @Test

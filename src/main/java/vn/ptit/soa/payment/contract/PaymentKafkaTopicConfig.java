@@ -20,4 +20,10 @@ public class PaymentKafkaTopicConfig {
     NewTopic depositTopic() {
         return TopicBuilder.name("soa.payment.deposit.v1").partitions(3).replicas(1).build();
     }
+
+    @Bean
+    NewTopic reputationDecisionTopic() {
+        return TopicBuilder.name("soa.payment.reputation-decision.v1")
+                .partitions(3).replicas(1).build();
+    }
 }

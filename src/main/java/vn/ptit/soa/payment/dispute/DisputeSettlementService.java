@@ -27,12 +27,14 @@ public class DisputeSettlementService {
     private final PaymentTrackingRepository tracking;
     private final ContractOutboxRepository contractOutbox;
     private final DepositOutboxRepository depositOutbox;
+    private final ReputationDecisionOutboxRepository reputationOutbox;
     private final Clock clock;
 
     public DisputeSettlementService(DisputeRepository disputes, DisputeEvidenceRepository evidence,
             DisputeSettlementRepository settlements, ContractRepository contracts,
             PaymentTrackingRepository tracking, ContractOutboxRepository contractOutbox,
-            DepositOutboxRepository depositOutbox, Clock clock) {
+            DepositOutboxRepository depositOutbox,
+            ReputationDecisionOutboxRepository reputationOutbox, Clock clock) {
         this.disputes = disputes;
         this.evidence = evidence;
         this.settlements = settlements;
@@ -40,6 +42,7 @@ public class DisputeSettlementService {
         this.tracking = tracking;
         this.contractOutbox = contractOutbox;
         this.depositOutbox = depositOutbox;
+        this.reputationOutbox = reputationOutbox;
         this.clock = clock;
     }
 
@@ -74,13 +77,11 @@ public class DisputeSettlementService {
             throw new IllegalArgumentException("Evidence must belong to this dispute without duplicates.");
         }
         String liable = uuid(liableAccountId);
-        if (violationCode != null && (violationCode.isBlank() || violationCode.length() > 40)) {
-            throw new IllegalArgumentException("Invalid violationCode.");
-        }
-        BigDecimal points = penaltyPoints == null ? null : new BigDecimal(penaltyPoints);
-        if (points != null && (points.signum() <= 0 || points.scale() > 1
-                || points.compareTo(new BigDecimal("10.0")) > 0 || violationCode == null)) {
-            throw new IllegalArgumentException("Invalid penaltyPoints.");
+        BigDecimal points;
+        try {
+            points = penaltyPoints == null ? null : new BigDecimal(penaltyPoints);
+        } catch (NumberFormatException invalid) {
+            throw new IllegalArgumentException("Invalid penalty points.", invalid);
         }
         Dispute snapshot = disputes.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Dispute does not exist."));
@@ -101,11 +102,13 @@ public class DisputeSettlementService {
             if (!previous.get().equals(submitted)
                     || !previousTerms.liableAccountId().equals(liable)
                     || !java.util.Objects.equals(previousTerms.violationCode(), violationCode)
-                    || !java.util.Objects.equals(previousTerms.penaltyPoints(), points)) {
+                    || !samePoints(previousTerms.penaltyPoints(), points)) {
                 throw new IllegalStateException("Idempotency key was reused with different content.");
             }
             return current;
         }
+        points = ReputationPenalty.requireCancelledViolation(
+                outcome, violationCode, penaltyPoints);
         if (!"UNDER_REVIEW".equals(current.status())
                 || !admin.equals(current.assignedAdminId())
                 || current.stateVersion() != expectedVersion
@@ -136,6 +139,8 @@ public class DisputeSettlementService {
         PaymentTracking settled = tracking.findByContractId(contract.contractId()).orElseThrow();
         contractOutbox.statusChanged(cancelled, "ACTIVE", admin, now);
         depositOutbox.statusChanged(cancelled, settled, deposit.status(), admin, now);
+        reputationOutbox.penalty(cancelled, decision, current.decisionVersion() + 1,
+                liable, violationCode, points, admin, now);
         return disputes.findById(id).orElseThrow();
     }
 
@@ -233,5 +238,10 @@ public class DisputeSettlementService {
         } catch (IllegalArgumentException invalid) {
             throw new IllegalArgumentException("ID must be a UUID.");
         }
+    }
+
+    private boolean samePoints(BigDecimal saved, BigDecimal submitted) {
+        return saved == null ? submitted == null
+                : submitted != null && saved.compareTo(submitted) == 0;
     }
 }
