@@ -84,6 +84,21 @@ public class ReputationDecisionOutboxRepository {
     private record OriginalPenalty(String accountId, String violationCode,
             BigDecimal requestedDelta) {}
 
+    public void completionReward(Contract contract, String decisionId, String accountId, Instant now) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("decisionId", decisionId);
+        data.put("decisionVersion", 1);
+        data.put("contractId", contract.contractId());
+        data.put("accountId", accountId);
+        data.put("counterpartyId", accountId.equals(contract.farmerId())
+                ? contract.traderId() : contract.farmerId());
+        data.put("action", "COMPLETION_REWARD");
+        data.put("requestedDelta", new BigDecimal("0.5"));
+        data.put("reasonCode", "CONTRACT_COMPLETED");
+        data.put("effectiveAt", now.toString());
+        save(contract, accountId, null, now, data);
+    }
+
     private void save(Contract contract, String accountId, String adminId, Instant now,
             Map<String, Object> data) {
         String eventId = UUID.randomUUID().toString();
