@@ -241,7 +241,7 @@ public class DisputeEvidenceService {
                     throw new IllegalArgumentException("Image cannot be re-encoded.");
                 }
                 byte[] clean = output.toByteArray();
-                if (clean.length > ABSOLUTE_MAX_BYTES * 4L) throw new ImageTooLargeException();
+                if (clean.length > maxBytes) throw new ImageTooLargeException();
                 return new EncodedImage(clean,
                         "jpeg".equals(outputFormat) ? "image/jpeg" : "image/png",
                         "jpeg".equals(outputFormat) ? ".jpg" : ".png");

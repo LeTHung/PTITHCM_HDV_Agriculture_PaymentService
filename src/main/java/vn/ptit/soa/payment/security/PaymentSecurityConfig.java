@@ -43,12 +43,15 @@ public class PaymentSecurityConfig {
                 .authorizeHttpRequests(auth -> auth.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers("/health").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/payments/contracts/*", "/api/v1/payments/deposits",
-                                "/api/v1/payments/deposits/*", "/api/v1/payments/disputes/*")
+                                "/api/v1/payments/deposits/*", "/api/v1/payments/disputes/*",
+                                "/api/v1/payments/disputes/*/evidence",
+                                "/api/v1/payments/disputes/*/evidence/*")
                         .authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/v1/payments/contracts/*/complete",
                                 "/api/v1/payments/deposits/*/release",
                                 "/api/v1/payments/contracts/*/disputes",
-                                "/api/v1/payments/disputes/*/responses")
+                                "/api/v1/payments/disputes/*/responses",
+                                "/api/v1/payments/disputes/*/evidence")
                         .authenticated()
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth -> oauth.jwt(Customizer.withDefaults())
