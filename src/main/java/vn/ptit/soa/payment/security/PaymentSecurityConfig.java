@@ -53,7 +53,8 @@ public class PaymentSecurityConfig {
                                 "/api/v1/payments/contracts/*/disputes",
                                 "/api/v1/payments/disputes/*/responses",
                                 "/api/v1/payments/disputes/*/evidence",
-                                "/api/v1/payments/admin/disputes/*/review")
+                                "/api/v1/payments/admin/disputes/*/review",
+                                "/api/v1/payments/admin/disputes/*/decisions")
                         .authenticated()
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth -> oauth.jwt(Customizer.withDefaults())
