@@ -50,6 +50,11 @@ public class SecurePaymentAdminDecisionController {
                     request.expectedVersion(), request.outcome(), request.depositDisposition(),
                     request.reason(), request.evidenceRefs(), request.liableAccountId(),
                     request.violationCode(), request.penaltyPoints());
+            case "MUTUAL_CANCEL" -> settlements.cancelMutually(
+                    disputeId, request.decisionId(), idempotencyKey, jwt.getSubject(),
+                    request.expectedVersion(), request.depositDisposition(), request.reason(),
+                    request.evidenceRefs(), request.liableAccountId(), request.violationCode(),
+                    request.penaltyPoints());
             default -> throw new IllegalArgumentException("Unsupported decision outcome.");
         };
     }

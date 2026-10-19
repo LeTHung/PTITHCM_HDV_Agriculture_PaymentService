@@ -28,6 +28,7 @@ class DisputeSettlementServiceTest {
     private static final String DISPUTE = "419a5f73-efe3-4a2c-89ed-6e2342d1f865";
     private static final String DECISION = "abb74c4e-35be-4c63-a671-663a54b3b4df";
     private static final String EVIDENCE = "11111111-1111-4111-8111-111111111111";
+    private static final String TRADER_EVIDENCE = "22222222-2222-4222-8222-222222222222";
     private static final String FARMER = "233196d7-d149-451d-8006-91e6563be4f0";
     private static final String TRADER = "e14961fb-7e5a-4613-8837-8cadf6a887de";
     private static final String ADMIN = "00000000-0000-0000-0000-000000000001";
@@ -107,6 +108,35 @@ class DisputeSettlementServiceTest {
         assertThrows(IllegalArgumentException.class, () -> service.settle(DISPUTE, DECISION,
                 DECISION, ADMIN, 2, "FARMER_VIOLATION", "REFUND_TO_TRADER",
                 "Verified", List.of(EVIDENCE), TRADER, null, null));
+    }
+
+    @Test
+    void mutualCancellationRequiresEachParticipantAndRefundsWithoutPenalty() {
+        when(evidence.belongsTo(EVIDENCE, DISPUTE, FARMER)).thenReturn(true);
+        when(evidence.belongsTo(TRADER_EVIDENCE, DISPUTE, TRADER)).thenReturn(true);
+        service.cancelMutually(DISPUTE, DECISION, DECISION, ADMIN, 2,
+                "REFUND_TO_TRADER", "Both agree to cancel",
+                List.of(EVIDENCE, TRADER_EVIDENCE), null, null, null);
+        verify(contracts).markCancelled(CONTRACT, 4, NOW);
+        verify(tracking).settleDispute(CONTRACT, "REFUNDED", 3, NOW);
+        verify(settlements).insert(eq(DECISION), any(), eq(CONTRACT), eq(ADMIN),
+                eq(null), eq(null), eq(null), eq(TRADER), eq("REFUND_TO_TRADER"),
+                eq(new BigDecimal("500001.00")), eq(BigDecimal.ZERO),
+                eq(BigDecimal.ZERO), eq(NOW));
+    }
+
+    @Test
+    void mutualCancellationRejectsOneSidedEvidenceAndPenalty() {
+        when(evidence.belongsTo(EVIDENCE, DISPUTE, FARMER)).thenReturn(true);
+        when(evidence.belongsTo(TRADER_EVIDENCE, DISPUTE, FARMER)).thenReturn(true);
+        assertThrows(IllegalArgumentException.class, () -> service.cancelMutually(
+                DISPUTE, DECISION, DECISION, ADMIN, 2, "REFUND_TO_TRADER",
+                "Both agree", List.of(EVIDENCE, TRADER_EVIDENCE), null, null, null));
+        assertThrows(IllegalArgumentException.class, () -> service.cancelMutually(
+                DISPUTE, DECISION, DECISION, ADMIN, 2, "REFUND_TO_TRADER",
+                "Both agree", List.of(EVIDENCE, TRADER_EVIDENCE), FARMER, null, null));
+        verify(settlements, never()).insert(any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     private PaymentTracking deposit(String status) {

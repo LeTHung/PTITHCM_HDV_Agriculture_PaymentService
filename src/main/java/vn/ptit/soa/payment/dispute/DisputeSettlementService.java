@@ -139,6 +139,91 @@ public class DisputeSettlementService {
         return disputes.findById(id).orElseThrow();
     }
 
+    @Transactional
+    public Dispute cancelMutually(String disputeId, String decisionId, String idempotencyKey,
+            String adminId, long expectedVersion, String disposition, String reason,
+            List<String> evidenceRefs, String liableAccountId, String violationCode,
+            String penaltyPoints) {
+        String id = uuid(disputeId);
+        String decision = uuid(decisionId);
+        String admin = uuid(adminId);
+        if (!decision.equals(uuid(idempotencyKey))) {
+            throw new IllegalArgumentException("Idempotency-Key must equal decisionId.");
+        }
+        if (!"REFUND_TO_TRADER".equals(disposition) || liableAccountId != null
+                || violationCode != null || penaltyPoints != null) {
+            throw new IllegalArgumentException("Mutual cancellation refunds the deposit without penalty.");
+        }
+        if (reason == null || reason.isBlank() || reason.length() > 5000) {
+            throw new IllegalArgumentException("reason must be 1..5000 characters.");
+        }
+        if (evidenceRefs == null || evidenceRefs.size() < 2 || evidenceRefs.size() > 20) {
+            throw new IllegalArgumentException("Evidence from both Contract participants is required.");
+        }
+        List<String> refs = evidenceRefs.stream().map(this::uuid).toList();
+        if (new HashSet<>(refs).size() != refs.size()) {
+            throw new IllegalArgumentException("Duplicate evidence reference.");
+        }
+        Dispute snapshot = disputes.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Dispute does not exist."));
+        Contract contract = contracts.findByIdForUpdate(snapshot.contractId())
+                .orElseThrow(() -> new IllegalArgumentException("Contract does not exist."));
+        if (admin.equals(contract.farmerId()) || admin.equals(contract.traderId())) {
+            throw new IllegalArgumentException("Admin cannot decide their own Contract.");
+        }
+        PaymentTracking deposit = tracking.findByContractIdForUpdate(contract.contractId())
+                .orElseThrow(() -> new IllegalStateException("Contract has no deposit tracking."));
+        Dispute current = disputes.findByIdForUpdate(id).orElseThrow();
+        DisputeDecision submitted = new DisputeDecision(decision, id, admin, expectedVersion,
+                "MUTUAL_CANCEL", disposition, reason.trim(), refs);
+        var previous = disputes.findDecision(decision);
+        if (previous.isPresent()) {
+            var previousTerms = settlements.findTerms(decision)
+                    .orElseThrow(() -> new IllegalStateException("Decision is not a settlement."));
+            if (!previous.get().equals(submitted) || previousTerms.liableAccountId() != null
+                    || previousTerms.violationCode() != null || previousTerms.penaltyPoints() != null) {
+                throw new IllegalStateException("Idempotency key was reused with different content.");
+            }
+            return current;
+        }
+        if (!"UNDER_REVIEW".equals(current.status())
+                || !admin.equals(current.assignedAdminId())
+                || current.stateVersion() != expectedVersion
+                || !"ACTIVE".equals(contract.status())
+                || !("LOCKED".equals(deposit.status()) || "RELEASABLE".equals(deposit.status()))
+                || !current.depositHold() || !deposit.disputeHold()) {
+            throw new IllegalStateException("Dispute, Contract or deposit is not eligible for mutual cancellation.");
+        }
+        boolean farmerEvidence = false;
+        boolean traderEvidence = false;
+        for (String ref : refs) {
+            boolean farmer = evidence.belongsTo(ref, id, contract.farmerId());
+            boolean trader = evidence.belongsTo(ref, id, contract.traderId());
+            if (!farmer && !trader) {
+                throw new IllegalArgumentException("Evidence must be submitted by a Contract participant.");
+            }
+            farmerEvidence |= farmer;
+            traderEvidence |= trader;
+        }
+        if (!farmerEvidence || !traderEvidence) {
+            throw new IllegalArgumentException("Evidence from both Contract participants is required.");
+        }
+        Instant now = clock.instant();
+        disputes.insertDecision(submitted, now);
+        settlements.insert(decision, deposit.paymentTrackingId(), contract.contractId(), admin,
+                null, null, null, contract.traderId(), disposition,
+                deposit.depositAmount(), BigDecimal.ZERO, BigDecimal.ZERO, now);
+        contracts.markCancelled(contract.contractId(), contract.stateVersion() + 1, now);
+        tracking.settleDispute(contract.contractId(), "REFUNDED", deposit.stateVersion() + 1, now);
+        disputes.resolve(id, "MUTUAL_CANCEL", current.stateVersion() + 1,
+                current.decisionVersion() + 1, now);
+        Contract cancelled = contracts.findById(contract.contractId()).orElseThrow();
+        PaymentTracking settled = tracking.findByContractId(contract.contractId()).orElseThrow();
+        contractOutbox.statusChanged(cancelled, "ACTIVE", admin, now);
+        depositOutbox.statusChanged(cancelled, settled, deposit.status(), admin, now);
+        return disputes.findById(id).orElseThrow();
+    }
+
     private String uuid(String value) {
         if (value == null) throw new IllegalArgumentException("ID must be a UUID.");
         try {

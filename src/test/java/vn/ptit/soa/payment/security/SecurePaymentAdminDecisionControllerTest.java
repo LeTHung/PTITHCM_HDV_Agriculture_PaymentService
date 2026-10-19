@@ -80,18 +80,23 @@ class SecurePaymentAdminDecisionControllerTest {
     }
 
     @Test
-    void unsupportedOutcomeNeverWritesDecision() {
+    void mutualCancellationUsesSeparateSettlementPath() {
         DisputeReadService reads = mock(DisputeReadService.class);
-        DisputeService disputes = mock(DisputeService.class);
-        var controller = new SecurePaymentAdminDecisionController(reads, disputes,
-                mock(DisputeSettlementService.class));
+        DisputeSettlementService settlements = mock(DisputeSettlementService.class);
+        var controller = new SecurePaymentAdminDecisionController(reads,
+                mock(DisputeService.class),
+                settlements);
         var request = new SecurePaymentAdminDecisionController.DecisionRequest(DECISION, 2,
-                "MUTUAL_CANCEL", null, null, null, "NONE", "Both cancel", List.of());
-        assertThrows(IllegalArgumentException.class,
-                () -> controller.decide(DISPUTE, DECISION, request, jwt(ADMIN, "ADMIN")));
+                "MUTUAL_CANCEL", null, null, null, "REFUND_TO_TRADER", "Both cancel",
+                List.of(EVIDENCE));
+        when(settlements.cancelMutually(DISPUTE, DECISION, DECISION, ADMIN, 2,
+                "REFUND_TO_TRADER", "Both cancel", List.of(EVIDENCE), null, null, null))
+                .thenReturn(resolved());
+        assertEquals("RESOLVED", controller.decide(DISPUTE, DECISION, request,
+                jwt(ADMIN, "ADMIN")).status());
         verify(reads).dispute(DISPUTE, ADMIN, true);
-        verify(disputes, never()).closeSafely(DISPUTE, DECISION, DECISION, ADMIN, 2,
-                "MUTUAL_CANCEL", "NONE", "Both cancel", List.of(), null, null, null);
+        verify(settlements).cancelMutually(DISPUTE, DECISION, DECISION, ADMIN, 2,
+                "REFUND_TO_TRADER", "Both cancel", List.of(EVIDENCE), null, null, null);
     }
 
     private Dispute resolved() {
