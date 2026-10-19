@@ -32,12 +32,14 @@ final class PaymentAccessStateFilter extends OncePerRequestFilter {
         boolean protectedWrite = "POST".equals(request.getMethod())
                 && path.matches("/api/v1/payments/(?:contracts/[^/]+/(?:complete|disputes)"
                         + "|deposits/[^/]+/release|disputes/[^/]+/(?:responses|evidence)"
-                        + "|admin/disputes/[^/]+/(?:review|decisions))");
+                        + "|admin/disputes/[^/]+/(?:review|decisions)"
+                        + "|admin/decisions/[^/]+/reversal)");
         if ((protectedRead || protectedWrite)
                 && SecurityContextHolder.getContext().getAuthentication() instanceof JwtAuthenticationToken jwt) {
             try {
                 if (path.equals("/api/v1/payments/admin/disputes")
-                        || path.matches("/api/v1/payments/admin/disputes/[^/]+/(?:review|decisions)")) {
+                        || path.matches("/api/v1/payments/admin/disputes/[^/]+/(?:review|decisions)")
+                        || path.matches("/api/v1/payments/admin/decisions/[^/]+/reversal")) {
                     access.requireActiveAdmin(jwt.getToken());
                 } else if (path.matches("/api/v1/payments/disputes/[^/]+/evidence(?:/[^/]+)?")
                         || ("GET".equals(request.getMethod())

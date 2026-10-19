@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import vn.ptit.soa.payment.contract.DepositNotFoundException;
 import vn.ptit.soa.payment.dispute.DisputeReadNotFoundException;
+import vn.ptit.soa.payment.dispute.DecisionReversalForbiddenException;
 import vn.ptit.soa.payment.dispute.EvidenceNotFoundException;
 import vn.ptit.soa.payment.dispute.DisputeEvidenceService.EvidenceStorageException;
 import vn.ptit.soa.payment.dispute.DisputeEvidenceService.ImageTooLargeException;
@@ -31,7 +32,7 @@ public class SecurePaymentExceptionHandler {
         return error(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", exception.getMessage(), request);
     }
 
-    @ExceptionHandler(PaymentActionForbiddenException.class)
+    @ExceptionHandler({PaymentActionForbiddenException.class, DecisionReversalForbiddenException.class})
     public ResponseEntity<Map<String, Object>> forbidden(HttpServletRequest request) {
         return error(HttpStatus.FORBIDDEN, "FORBIDDEN", "This account cannot perform the action.", request);
     }

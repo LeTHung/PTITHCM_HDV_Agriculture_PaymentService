@@ -14,12 +14,14 @@ public class DisputeReadService {
     private final ContractRepository contracts;
     private final DisputeRepository disputes;
     private final AdminDisputeFilingRepository filings;
+    private final DecisionReversalRepository reversals;
 
     public DisputeReadService(ContractRepository contracts, DisputeRepository disputes,
-            AdminDisputeFilingRepository filings) {
+            AdminDisputeFilingRepository filings, DecisionReversalRepository reversals) {
         this.contracts = contracts;
         this.disputes = disputes;
         this.filings = filings;
+        this.reversals = reversals;
     }
 
     // Learning-only: production must derive actor and role from verified JWT/access-state.
@@ -48,6 +50,7 @@ public class DisputeReadService {
             throw new DisputeReadNotFoundException();
         }
         DisputeDecision decision = disputes.findDecisionForDispute(dispute.disputeId()).orElse(null);
+        DecisionReversal reversal = reversals.findByDispute(dispute.disputeId()).orElse(null);
         AdminDisputeFilingRepository.Filing filing = asAdmin
                 ? filings.find(dispute.disputeId()).orElse(null) : null;
         return new DisputeDetail(dispute.disputeId(), dispute.contractId(), dispute.openedBy(),
@@ -55,7 +58,7 @@ public class DisputeReadService {
                 dispute.depositHold(), dispute.assignedAdminId(), dispute.responseDueAt(),
                 dispute.resolvedAt(), dispute.outcome(), dispute.stateVersion(),
                 dispute.decisionVersion(), dispute.createdAt(), dispute.updatedAt(), decision,
-                filing);
+                reversal, filing);
     }
 
     private boolean participant(Contract contract, String actor) {
@@ -86,6 +89,6 @@ public class DisputeReadService {
             String reasonCode, String description, String status, boolean depositHold,
             String assignedAdminId, Instant responseDueAt, Instant resolvedAt,
             String outcome, long stateVersion, long decisionVersion, Instant createdAt,
-            Instant updatedAt, DisputeDecision decision,
+            Instant updatedAt, DisputeDecision decision, DecisionReversal reversal,
             AdminDisputeFilingRepository.Filing adminFiling) {}
 }

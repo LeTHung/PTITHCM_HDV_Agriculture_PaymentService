@@ -25,7 +25,8 @@ class DisputeReadServiceTest {
     private final ContractRepository contracts = mock(ContractRepository.class);
     private final DisputeRepository disputes = mock(DisputeRepository.class);
     private final AdminDisputeFilingRepository filings = mock(AdminDisputeFilingRepository.class);
-    private final DisputeReadService reads = new DisputeReadService(contracts, disputes, filings);
+    private final DecisionReversalRepository reversals = mock(DecisionReversalRepository.class);
+    private final DisputeReadService reads = new DisputeReadService(contracts, disputes, filings, reversals);
 
     @BeforeEach
     void setUp() {
@@ -53,7 +54,12 @@ class DisputeReadServiceTest {
         AdminDisputeFilingRepository.Filing filing = new AdminDisputeFilingRepository.Filing(
                 DISPUTE, ADMIN, FARMER, "Verified registered email", NOW);
         when(filings.find(DISPUTE)).thenReturn(Optional.of(filing));
+        DecisionReversal reversal = new DecisionReversal("11111111-1111-4111-8111-111111111111",
+                ADMIN, DISPUTE, "22222222-2222-4222-8222-222222222222",
+                "Corrected", List.of(), NOW);
+        when(reversals.findByDispute(DISPUTE)).thenReturn(Optional.of(reversal));
         assertEquals(decision, reads.dispute(DISPUTE, TRADER, false).decision());
+        assertEquals(reversal, reads.dispute(DISPUTE, TRADER, false).reversal());
         assertEquals(decision, reads.dispute(DISPUTE, ADMIN, true).decision());
         assertNull(reads.dispute(DISPUTE, TRADER, false).adminFiling());
         assertEquals(filing, reads.dispute(DISPUTE, ADMIN, true).adminFiling());

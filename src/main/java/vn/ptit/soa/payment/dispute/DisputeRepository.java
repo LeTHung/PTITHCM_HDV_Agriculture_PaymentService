@@ -110,6 +110,15 @@ public class DisputeRepository {
         if (changed != 1) throw new IllegalStateException("Dispute was not resolved.");
     }
 
+    public void recordReversal(String id, long expectedDecisionVersion, Instant now) {
+        int changed = jdbc.update("""
+                UPDATE learning.disputes
+                SET decision_version=decision_version+1,state_version=state_version+1,updated_at=?
+                WHERE dispute_id=?::uuid AND status='RESOLVED' AND decision_version=?
+                """, Timestamp.from(now), id, expectedDecisionVersion);
+        if (changed != 1) throw new IllegalStateException("Dispute decision version changed.");
+    }
+
     public void insertDecision(DisputeDecision decision, Instant now) {
         jdbc.update("""
                 INSERT INTO learning.dispute_decisions
