@@ -42,13 +42,18 @@ public class PaymentSecurityConfig {
                 .addFilterAfter(new PaymentAccessStateFilter(access, json), BearerTokenAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers("/health").permitAll()
+                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/payments/contracts/*", "/api/v1/payments/deposits",
                                 "/api/v1/payments/deposits/*", "/api/v1/payments/disputes/*",
                                 "/api/v1/payments/disputes/*/evidence",
                                 "/api/v1/payments/disputes/*/evidence/*",
                                 "/api/v1/payments/admin/disputes")
                         .authenticated()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/payments/contracts/*/complete",
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/v1/payments/contracts",
+                                "/api/v1/payments/contracts/*/accept",
+                                "/api/v1/payments/contracts/*/complete",
+                                "/api/v1/payments/deposits/*/pay",
                                 "/api/v1/payments/deposits/*/release",
                                 "/api/v1/payments/contracts/*/disputes",
                                 "/api/v1/payments/disputes/*/responses",
@@ -57,6 +62,8 @@ public class PaymentSecurityConfig {
                                 "/api/v1/payments/admin/disputes/*/decisions",
                                 "/api/v1/payments/admin/contracts/*/disputes",
                                 "/api/v1/payments/admin/decisions/*/reversal")
+                        .authenticated()
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/payments/contracts/*")
                         .authenticated()
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth -> oauth.jwt(Customizer.withDefaults())
