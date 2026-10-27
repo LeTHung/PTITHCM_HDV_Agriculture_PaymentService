@@ -11,7 +11,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import vn.ptit.soa.payment.contract.Contract;
 import vn.ptit.soa.payment.contract.ContractRepository;
+import vn.ptit.soa.payment.contract.DepositFinalizer;
 import vn.ptit.soa.payment.contract.DepositLifecycleService;
+import vn.ptit.soa.payment.contract.DepositService;
 import vn.ptit.soa.payment.dispute.DisputeReadNotFoundException;
 
 @RestController
@@ -20,10 +22,25 @@ import vn.ptit.soa.payment.dispute.DisputeReadNotFoundException;
 public class SecurePaymentActionController {
     private final ContractRepository contracts;
     private final DepositLifecycleService lifecycle;
+    private final DepositService deposits;
 
-    public SecurePaymentActionController(ContractRepository contracts, DepositLifecycleService lifecycle) {
+    public SecurePaymentActionController(ContractRepository contracts,
+            DepositLifecycleService lifecycle, DepositService deposits) {
         this.contracts = contracts;
         this.lifecycle = lifecycle;
+        this.deposits = deposits;
+    }
+
+    @PostMapping("/deposits/{contractId}/pay")
+    public DepositFinalizer.PayResult pay(@PathVariable String contractId,
+            @RequestBody(required = false) String body, @AuthenticationPrincipal Jwt jwt) {
+        requireEmptyBody(body);
+        Contract contract = contract(contractId);
+        if (!"TRADER".equals(jwt.getClaimAsString("role"))
+                || !contract.traderId().equals(jwt.getSubject())) {
+            throw new PaymentActionForbiddenException();
+        }
+        return deposits.pay(contract.contractId(), jwt.getSubject());
     }
 
     @PostMapping("/contracts/{contractId}/complete")

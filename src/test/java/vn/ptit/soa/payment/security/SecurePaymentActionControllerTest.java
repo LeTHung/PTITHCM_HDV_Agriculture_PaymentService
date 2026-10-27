@@ -15,7 +15,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.jwt.Jwt;
 import vn.ptit.soa.payment.contract.Contract;
 import vn.ptit.soa.payment.contract.ContractRepository;
+import vn.ptit.soa.payment.contract.DepositFinalizer;
 import vn.ptit.soa.payment.contract.DepositLifecycleService;
+import vn.ptit.soa.payment.contract.DepositService;
 
 class SecurePaymentActionControllerTest {
     private static final String ID = "d25c8106-a76f-4480-a747-6f0c7e2a042d";
@@ -23,13 +25,15 @@ class SecurePaymentActionControllerTest {
     private static final String TRADER = "e14961fb-7e5a-4613-8837-8cadf6a887de";
     private ContractRepository contracts;
     private DepositLifecycleService lifecycle;
+    private DepositService deposits;
     private SecurePaymentActionController controller;
 
     @BeforeEach
     void setUp() {
         contracts = mock(ContractRepository.class);
         lifecycle = mock(DepositLifecycleService.class);
-        controller = new SecurePaymentActionController(contracts, lifecycle);
+        deposits = mock(DepositService.class);
+        controller = new SecurePaymentActionController(contracts, lifecycle, deposits);
         Instant now = Instant.parse("2026-10-19T00:00:00Z");
         Contract contract = new Contract(ID, "202fe3fd-626a-41c8-80fd-70af82c1f256",
                 "f72a08bd-33d7-4221-9e55-55d5d7f2e2f0", FARMER, TRADER,
@@ -71,6 +75,18 @@ class SecurePaymentActionControllerTest {
         assertThrows(IllegalArgumentException.class,
                 () -> controller.complete(ID, forged, jwt(TRADER, "TRADER")));
         verify(lifecycle, never()).complete(ID, TRADER);
+    }
+
+    @Test
+    void traderPaysDepositWithJwtIdentity() {
+        Jwt trader = jwt(TRADER, "TRADER");
+        when(deposits.pay(ID, TRADER)).thenReturn(new DepositFinalizer.PayResult(
+                "419a5f73-efe3-4a2c-89ed-6e2342d1f865", ID, new BigDecimal("500000.50"),
+                "LOCKED", "ACTIVE", true));
+        var result = controller.pay(ID, null, trader);
+        assertEquals("ACTIVE", result.contractStatus());
+        assertEquals("LOCKED", result.status());
+        verify(deposits).pay(ID, TRADER);
     }
 
     private Jwt jwt(String id, String role) {
