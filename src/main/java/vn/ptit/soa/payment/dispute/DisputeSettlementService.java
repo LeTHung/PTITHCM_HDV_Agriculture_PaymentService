@@ -28,13 +28,15 @@ public class DisputeSettlementService {
     private final ContractOutboxRepository contractOutbox;
     private final DepositOutboxRepository depositOutbox;
     private final ReputationDecisionOutboxRepository reputationOutbox;
+    private final CompletionRewardRepository rewards;
     private final Clock clock;
 
     public DisputeSettlementService(DisputeRepository disputes, DisputeEvidenceRepository evidence,
             DisputeSettlementRepository settlements, ContractRepository contracts,
             PaymentTrackingRepository tracking, ContractOutboxRepository contractOutbox,
             DepositOutboxRepository depositOutbox,
-            ReputationDecisionOutboxRepository reputationOutbox, Clock clock) {
+            ReputationDecisionOutboxRepository reputationOutbox,
+            CompletionRewardRepository rewards, Clock clock) {
         this.disputes = disputes;
         this.evidence = evidence;
         this.settlements = settlements;
@@ -43,6 +45,7 @@ public class DisputeSettlementService {
         this.contractOutbox = contractOutbox;
         this.depositOutbox = depositOutbox;
         this.reputationOutbox = reputationOutbox;
+        this.rewards = rewards;
         this.clock = clock;
     }
 
@@ -58,11 +61,15 @@ public class DisputeSettlementService {
         if (!decision.equals(uuid(idempotencyKey))) {
             throw new IllegalArgumentException("Idempotency-Key must equal decisionId.");
         }
-        boolean farmerFault = "FARMER_VIOLATION".equals(outcome)
-                && "REFUND_TO_TRADER".equals(disposition);
-        boolean traderFault = "TRADER_VIOLATION".equals(outcome)
-                && "FORFEIT_TO_FARMER".equals(disposition);
+        boolean farmerFault = "FARMER_VIOLATION".equals(outcome);
+        boolean traderFault = "TRADER_VIOLATION".equals(outcome);
         if (!farmerFault && !traderFault) {
+            throw new IllegalArgumentException("Outcome and deposit disposition do not match.");
+        }
+        boolean postRelease = "NONE".equals(disposition);
+        boolean normalFarmer = farmerFault && "REFUND_TO_TRADER".equals(disposition);
+        boolean normalTrader = traderFault && "FORFEIT_TO_FARMER".equals(disposition);
+        if (!postRelease && !normalFarmer && !normalTrader) {
             throw new IllegalArgumentException("Outcome and deposit disposition do not match.");
         }
         if (reason == null || reason.isBlank() || reason.length() > 5000) {
@@ -111,23 +118,49 @@ public class DisputeSettlementService {
                 outcome, violationCode, penaltyPoints);
         if (!"UNDER_REVIEW".equals(current.status())
                 || !admin.equals(current.assignedAdminId())
-                || current.stateVersion() != expectedVersion
-                || !"ACTIVE".equals(contract.status())
-                || !("LOCKED".equals(deposit.status()) || "RELEASABLE".equals(deposit.status()))
-                || !current.depositHold() || !deposit.disputeHold()) {
+                || current.stateVersion() != expectedVersion) {
             throw new IllegalStateException("Dispute, Contract or deposit is not eligible for settlement.");
+        }
+        if (postRelease) {
+            if (!("COMPLETED".equals(contract.status()) || "RELEASED".equals(deposit.status()))
+                    || current.depositHold() || deposit.disputeHold()) {
+                throw new IllegalStateException("Dispute, Contract or deposit is not eligible for settlement.");
+            }
+        } else {
+            if (!"ACTIVE".equals(contract.status())
+                    || !("LOCKED".equals(deposit.status()) || "RELEASABLE".equals(deposit.status()))
+                    || !current.depositHold() || !deposit.disputeHold()) {
+                throw new IllegalStateException("Dispute, Contract or deposit is not eligible for settlement.");
+            }
         }
         String expectedLiable = farmerFault ? contract.farmerId() : contract.traderId();
         if (!liable.equals(expectedLiable)) {
             throw new IllegalArgumentException("liableAccountId does not match outcome.");
         }
         Instant now = clock.instant();
+        String beneficiary = farmerFault ? contract.traderId() : contract.farmerId();
+        disputes.insertDecision(submitted, now);
+
+        if (postRelease) {
+            settlements.insert(decision, deposit.paymentTrackingId(), contract.contractId(), admin,
+                    liable, violationCode, points, beneficiary, "NONE",
+                    deposit.depositAmount(), BigDecimal.ZERO, BigDecimal.ZERO, now);
+            disputes.resolve(id, outcome, current.stateVersion() + 1,
+                    current.decisionVersion() + 1, now);
+            var unrevoked = rewards.revokeAllForContract(contract.contractId(), decision, now);
+            for (var reward : unrevoked) {
+                reputationOutbox.reverseCompletionReward(contract, reward.decisionId(),
+                        reward.accountId(), admin, now);
+            }
+            reputationOutbox.penalty(contract, decision, current.decisionVersion() + 1,
+                    liable, violationCode, points, admin, now);
+            return disputes.findById(id).orElseThrow();
+        }
+
         BigDecimal penaltyRate = farmerFault ? contract.penaltyRate() : BigDecimal.ZERO;
         BigDecimal penaltyAmount = deposit.depositAmount().multiply(penaltyRate)
                 .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
-        String beneficiary = farmerFault ? contract.traderId() : contract.farmerId();
         String nextStatus = farmerFault ? "REFUNDED" : "FORFEITED";
-        disputes.insertDecision(submitted, now);
         settlements.insert(decision, deposit.paymentTrackingId(), contract.contractId(), admin,
                 liable, violationCode, points, beneficiary, disposition,
                 deposit.depositAmount(), penaltyRate, penaltyAmount, now);

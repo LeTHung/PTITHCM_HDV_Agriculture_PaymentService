@@ -99,6 +99,25 @@ public class ReputationDecisionOutboxRepository {
         save(contract, accountId, null, now, data);
     }
 
+    public void reverseCompletionReward(Contract contract, String originalDecisionId,
+            String accountId, String adminId, Instant now) {
+        String reversalDecisionId = UUID.randomUUID().toString();
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("decisionId", reversalDecisionId);
+        data.put("decisionVersion", 1);
+        data.put("originalDecisionId", originalDecisionId);
+        data.put("contractId", contract.contractId());
+        data.put("accountId", accountId);
+        data.put("counterpartyId", accountId.equals(contract.farmerId())
+                ? contract.traderId() : contract.farmerId());
+        data.put("action", "REVERSAL");
+        data.put("violationCode", null);
+        data.put("requestedDelta", new BigDecimal("-0.5"));
+        data.put("reasonCode", "LATE_VIOLATION_REWARD_REVOKED");
+        data.put("effectiveAt", now.toString());
+        save(contract, accountId, adminId, now, data);
+    }
+
     private void save(Contract contract, String accountId, String adminId, Instant now,
             Map<String, Object> data) {
         String eventId = UUID.randomUUID().toString();

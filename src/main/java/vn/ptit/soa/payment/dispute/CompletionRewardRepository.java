@@ -54,4 +54,24 @@ public class CompletionRewardRepository {
                 ON CONFLICT (contract_id,account_id) DO NOTHING
                 """, contractId, accountId, decisionId, Timestamp.from(now)) == 1;
     }
+
+    public List<UnrevokedReward> revokeAllForContract(String contractId, String decisionId, Instant now) {
+        List<UnrevokedReward> unrevoked = jdbc.query("""
+                SELECT account_id::text, decision_id::text
+                FROM learning.completion_rewards
+                WHERE contract_id=?::uuid AND revoked_at IS NULL
+                FOR UPDATE
+                """, (rs, row) -> new UnrevokedReward(rs.getString(1), rs.getString(2)),
+                contractId);
+        if (!unrevoked.isEmpty()) {
+            jdbc.update("""
+                    UPDATE learning.completion_rewards
+                    SET revoked_at=?, revoked_by_decision_id=?::uuid
+                    WHERE contract_id=?::uuid AND revoked_at IS NULL
+                    """, Timestamp.from(now), decisionId, contractId);
+        }
+        return unrevoked;
+    }
+
+    public record UnrevokedReward(String accountId, String decisionId) {}
 }

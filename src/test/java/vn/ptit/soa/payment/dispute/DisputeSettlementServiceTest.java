@@ -39,8 +39,9 @@ class DisputeSettlementServiceTest {
     private DisputeSettlementRepository settlements;
     private ContractRepository contracts;
     private PaymentTrackingRepository tracking;
-    private DisputeSettlementService service;
     private ReputationDecisionOutboxRepository reputationOutbox;
+    private CompletionRewardRepository rewards;
+    private DisputeSettlementService service;
 
     @BeforeEach
     void setUp() {
@@ -50,9 +51,10 @@ class DisputeSettlementServiceTest {
         contracts = mock(ContractRepository.class);
         tracking = mock(PaymentTrackingRepository.class);
         reputationOutbox = mock(ReputationDecisionOutboxRepository.class);
+        rewards = mock(CompletionRewardRepository.class);
         service = new DisputeSettlementService(disputes, evidence, settlements,
                 contracts, tracking, mock(ContractOutboxRepository.class),
-                mock(DepositOutboxRepository.class), reputationOutbox,
+                mock(DepositOutboxRepository.class), reputationOutbox, rewards,
                 Clock.fixed(NOW, ZoneOffset.UTC));
         Contract contract = new Contract(CONTRACT, "202fe3fd-626a-41c8-80fd-70af82c1f256",
                 "f72a08bd-33d7-4221-9e55-55d5d7f2e2f0", FARMER, TRADER,
@@ -178,9 +180,129 @@ class DisputeSettlementServiceTest {
                 any(), any(), any(), any(), any(), any(), any(), any());
     }
 
+    @Test
+    void postReleaseFarmerViolationRevokesCompletionRewardsAndEmitsPenalty() {
+        Contract completed = new Contract(CONTRACT, "202fe3fd-626a-41c8-80fd-70af82c1f256",
+                "f72a08bd-33d7-4221-9e55-55d5d7f2e2f0", FARMER, TRADER,
+                new BigDecimal("10000010.00"), "Terms", NOW.minusSeconds(86400 * 4),
+                "COMPLETED", new BigDecimal("20.00"), NOW.minusSeconds(86400 * 3), 4, NOW, NOW);
+        Dispute lateDispute = new Dispute(DISPUTE, CONTRACT, TRADER, "LATE_COMPLAINT", "Details",
+                "UNDER_REVIEW", false, ADMIN, NOW.plusSeconds(172800), null, null,
+                2, 0, NOW, NOW);
+        PaymentTracking released = deposit("RELEASED", false);
+        when(contracts.findByIdForUpdate(CONTRACT)).thenReturn(Optional.of(completed));
+        when(contracts.findById(CONTRACT)).thenReturn(Optional.of(completed));
+        when(disputes.findById(DISPUTE)).thenReturn(Optional.of(lateDispute));
+        when(disputes.findByIdForUpdate(DISPUTE)).thenReturn(Optional.of(lateDispute));
+        when(tracking.findByContractIdForUpdate(CONTRACT)).thenReturn(Optional.of(released));
+        when(tracking.findByContractId(CONTRACT)).thenReturn(Optional.of(released));
+
+        var unrevoked = List.of(
+                new CompletionRewardRepository.UnrevokedReward(FARMER, "f-reward-id"),
+                new CompletionRewardRepository.UnrevokedReward(TRADER, "t-reward-id"));
+        when(rewards.revokeAllForContract(CONTRACT, DECISION, NOW)).thenReturn(unrevoked);
+
+        service.settle(DISPUTE, DECISION, DECISION, ADMIN, 2, "FARMER_VIOLATION",
+                "NONE", "Late violation verified", List.of(EVIDENCE), FARMER, "F04", "3.0");
+
+        verify(contracts, never()).markCancelled(any(), anyLong(), any());
+        verify(tracking, never()).settleDispute(any(), any(), anyLong(), any());
+        verify(settlements).insert(eq(DECISION), eq(released.paymentTrackingId()), eq(CONTRACT),
+                eq(ADMIN), eq(FARMER), eq("F04"), eq(new BigDecimal("3.0")), eq(TRADER),
+                eq("NONE"), eq(released.depositAmount()), eq(BigDecimal.ZERO),
+                eq(BigDecimal.ZERO), eq(NOW));
+        verify(reputationOutbox).reverseCompletionReward(completed, "f-reward-id", FARMER, ADMIN, NOW);
+        verify(reputationOutbox).reverseCompletionReward(completed, "t-reward-id", TRADER, ADMIN, NOW);
+        verify(reputationOutbox).penalty(completed, DECISION, 1L, FARMER, "F04",
+                new BigDecimal("3.0"), ADMIN, NOW);
+    }
+
+    @Test
+    void postReleaseTraderViolationRevokesCompletionRewardsAndEmitsPenalty() {
+        Contract completed = new Contract(CONTRACT, "202fe3fd-626a-41c8-80fd-70af82c1f256",
+                "f72a08bd-33d7-4221-9e55-55d5d7f2e2f0", FARMER, TRADER,
+                new BigDecimal("10000010.00"), "Terms", NOW.minusSeconds(86400 * 4),
+                "COMPLETED", new BigDecimal("20.00"), NOW.minusSeconds(86400 * 3), 4, NOW, NOW);
+        Dispute lateDispute = new Dispute(DISPUTE, CONTRACT, FARMER, "LATE_COMPLAINT", "Details",
+                "UNDER_REVIEW", false, ADMIN, NOW.plusSeconds(172800), null, null,
+                2, 0, NOW, NOW);
+        PaymentTracking released = deposit("RELEASED", false);
+        when(contracts.findByIdForUpdate(CONTRACT)).thenReturn(Optional.of(completed));
+        when(contracts.findById(CONTRACT)).thenReturn(Optional.of(completed));
+        when(disputes.findById(DISPUTE)).thenReturn(Optional.of(lateDispute));
+        when(disputes.findByIdForUpdate(DISPUTE)).thenReturn(Optional.of(lateDispute));
+        when(tracking.findByContractIdForUpdate(CONTRACT)).thenReturn(Optional.of(released));
+        when(tracking.findByContractId(CONTRACT)).thenReturn(Optional.of(released));
+
+        var unrevoked = List.of(
+                new CompletionRewardRepository.UnrevokedReward(TRADER, "t-reward-id"));
+        when(rewards.revokeAllForContract(CONTRACT, DECISION, NOW)).thenReturn(unrevoked);
+
+        service.settle(DISPUTE, DECISION, DECISION, ADMIN, 2, "TRADER_VIOLATION",
+                "NONE", "Trader late violation", List.of(EVIDENCE), TRADER, "T04", "3.0");
+
+        verify(contracts, never()).markCancelled(any(), anyLong(), any());
+        verify(tracking, never()).settleDispute(any(), any(), anyLong(), any());
+        verify(settlements).insert(eq(DECISION), eq(released.paymentTrackingId()), eq(CONTRACT),
+                eq(ADMIN), eq(TRADER), eq("T04"), eq(new BigDecimal("3.0")), eq(FARMER),
+                eq("NONE"), eq(released.depositAmount()), eq(BigDecimal.ZERO),
+                eq(BigDecimal.ZERO), eq(NOW));
+        verify(reputationOutbox).reverseCompletionReward(completed, "t-reward-id", TRADER, ADMIN, NOW);
+        verify(reputationOutbox).penalty(completed, DECISION, 1L, TRADER, "T04",
+                new BigDecimal("3.0"), ADMIN, NOW);
+    }
+
+    @Test
+    void postReleaseRejectsRefundOrForfeitDisposition() {
+        Contract completed = new Contract(CONTRACT, "202fe3fd-626a-41c8-80fd-70af82c1f256",
+                "f72a08bd-33d7-4221-9e55-55d5d7f2e2f0", FARMER, TRADER,
+                new BigDecimal("10000010.00"), "Terms", NOW.minusSeconds(86400 * 4),
+                "COMPLETED", new BigDecimal("20.00"), NOW.minusSeconds(86400 * 3), 4, NOW, NOW);
+        Dispute lateDispute = new Dispute(DISPUTE, CONTRACT, TRADER, "LATE_COMPLAINT", "Details",
+                "UNDER_REVIEW", false, ADMIN, NOW.plusSeconds(172800), null, null,
+                2, 0, NOW, NOW);
+        PaymentTracking released = deposit("RELEASED", false);
+        when(contracts.findByIdForUpdate(CONTRACT)).thenReturn(Optional.of(completed));
+        when(disputes.findById(DISPUTE)).thenReturn(Optional.of(lateDispute));
+        when(disputes.findByIdForUpdate(DISPUTE)).thenReturn(Optional.of(lateDispute));
+        when(tracking.findByContractIdForUpdate(CONTRACT)).thenReturn(Optional.of(released));
+
+        assertThrows(IllegalStateException.class, () -> service.settle(DISPUTE, DECISION,
+                DECISION, ADMIN, 2, "FARMER_VIOLATION", "REFUND_TO_TRADER",
+                "Verified", List.of(EVIDENCE), FARMER, "F04", "3.0"));
+    }
+
+    @Test
+    void activeContractRejectsNoneDisposition() {
+        assertThrows(IllegalStateException.class, () -> service.settle(DISPUTE, DECISION,
+                DECISION, ADMIN, 2, "FARMER_VIOLATION", "NONE",
+                "Verified", List.of(EVIDENCE), FARMER, "F04", "3.0"));
+    }
+
+    @Test
+    void idempotentPostReleaseDoesNotDuplicateReversalsOrPenalty() {
+        when(disputes.findDecision(DECISION)).thenReturn(Optional.of(new DisputeDecision(
+                DECISION, DISPUTE, ADMIN, 2, "FARMER_VIOLATION", "NONE",
+                "Late violation verified", List.of(EVIDENCE))));
+        when(settlements.findTerms(DECISION)).thenReturn(Optional.of(
+                new DisputeSettlementRepository.SettlementTerms(FARMER, "F04",
+                        new BigDecimal("3.0"))));
+
+        service.settle(DISPUTE, DECISION, DECISION, ADMIN, 2, "FARMER_VIOLATION",
+                "NONE", "Late violation verified", List.of(EVIDENCE), FARMER, "F04", "3.0");
+
+        verify(rewards, never()).revokeAllForContract(any(), any(), any());
+        verify(reputationOutbox, never()).reverseCompletionReward(any(), any(), any(), any(), any());
+        verify(reputationOutbox, never()).penalty(any(), any(), anyLong(), any(), any(), any(), any(), any());
+    }
+
     private PaymentTracking deposit(String status) {
+        return deposit(status, true);
+    }
+
+    private PaymentTracking deposit(String status, boolean disputeHold) {
         return new PaymentTracking("e99f11f1-018b-4e7e-b267-c4def2e8505b", CONTRACT,
                 new BigDecimal("5.00"), new BigDecimal("500001.00"), status, NOW,
-                NOW.plusSeconds(86400), null, null, null, true, 2, NOW, NOW);
+                NOW.plusSeconds(86400), null, null, null, disputeHold, 2, NOW, NOW);
     }
 }

@@ -28,4 +28,16 @@ class ReputationDecisionOutboxRepositoryTest {
         repository.reversePenalty(contract, reversal, 2);
         verify(jdbc, never()).update(anyString(), any(Object[].class));
     }
+
+    @Test
+    void reverseCompletionRewardInsertsOutboxRow() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        var repository = new ReputationDecisionOutboxRepository(jdbc, new ObjectMapper());
+        Instant now = Instant.parse("2026-10-20T00:00:00Z");
+        var contract = new Contract("contract-id", "offer", "conversation", "farmer-id", "trader-id",
+                BigDecimal.TEN, "terms", now, "COMPLETED", BigDecimal.ZERO,
+                now, 4, now, now);
+        repository.reverseCompletionReward(contract, "original-reward-id", "farmer-id", "admin-id", now);
+        verify(jdbc).update(anyString(), any(), any(), any(), any(), any(), any(), any());
+    }
 }
