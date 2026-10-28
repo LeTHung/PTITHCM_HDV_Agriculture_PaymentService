@@ -56,7 +56,7 @@ public class SecurePaymentReadController {
     }
 
     public record DepositView(String paymentTrackingId, String contractId,
-            BigDecimal depositRate, @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING) BigDecimal depositAmount, String status,
+            BigDecimal depositRate, @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING) @io.swagger.v3.oas.annotations.media.Schema(type="string", implementation=String.class) BigDecimal depositAmount, String status,
             Instant paidAt, Instant deliveryDate, Instant releaseAt, Instant releasedAt) {}
 
     public record DepositPage(List<DepositView> data, String nextCursor) {}

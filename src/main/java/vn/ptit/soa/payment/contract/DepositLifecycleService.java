@@ -157,6 +157,6 @@ public class DepositLifecycleService {
     public record CompleteResult(String contractId, String status, String paymentTrackingId,
             String depositStatus, Instant completedConfirmedAt) {}
 
-    public record ReleaseResult(String paymentTrackingId, String contractId, @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING) BigDecimal depositAmount,
+    public record ReleaseResult(String paymentTrackingId, String contractId, @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING) @io.swagger.v3.oas.annotations.media.Schema(type="string", implementation=String.class) BigDecimal depositAmount,
             String status, String contractStatus, Instant releasedAt, boolean simulated) {}
 }

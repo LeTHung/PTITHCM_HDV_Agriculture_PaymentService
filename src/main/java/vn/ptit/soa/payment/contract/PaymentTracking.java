@@ -6,7 +6,7 @@ import java.time.Instant;
 public record PaymentTracking(String paymentTrackingId, String contractId,
         BigDecimal depositRate,
         @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING)
-        BigDecimal depositAmount, String status,
+        @io.swagger.v3.oas.annotations.media.Schema(type="string", implementation=String.class) BigDecimal depositAmount, String status,
         Instant paidAt, Instant deliveryDate, Instant completedConfirmedAt,
         Instant releaseAt, Instant releasedAt, boolean disputeHold,
         long stateVersion, Instant createdAt, Instant updatedAt) {

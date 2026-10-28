@@ -56,6 +56,6 @@ public class DepositFinalizer {
                 deposit.depositAmount(), deposit.status(), contract.status(), true);
     }
 
-    public record PayResult(String paymentTrackingId, String contractId, @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING) BigDecimal depositAmount,
+    public record PayResult(String paymentTrackingId, String contractId, @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING) @io.swagger.v3.oas.annotations.media.Schema(type="string", implementation=String.class) BigDecimal depositAmount,
             String status, String contractStatus, boolean simulated) {}
 }
