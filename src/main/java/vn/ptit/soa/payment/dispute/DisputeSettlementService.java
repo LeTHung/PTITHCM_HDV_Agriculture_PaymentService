@@ -114,16 +114,21 @@ public class DisputeSettlementService {
             }
             return current;
         }
-        points = ReputationPenalty.requireCancelledViolation(
-                outcome, violationCode, penaltyPoints);
+        points = ReputationPenalty.requireViolation(
+                outcome, violationCode, penaltyPoints, postRelease
+                        && ("ACTIVE".equals(contract.status()) || "COMPLETED".equals(contract.status())));
         if (!"UNDER_REVIEW".equals(current.status())
                 || !admin.equals(current.assignedAdminId())
                 || current.stateVersion() != expectedVersion) {
             throw new IllegalStateException("Dispute, Contract or deposit is not eligible for settlement.");
         }
         if (postRelease) {
-            if (!("COMPLETED".equals(contract.status()) || "RELEASED".equals(deposit.status()))
-                    || current.depositHold() || deposit.disputeHold()) {
+            boolean continuingHeld = "ACTIVE".equals(contract.status())
+                    && ("LOCKED".equals(deposit.status()) || "RELEASABLE".equals(deposit.status()))
+                    && current.depositHold() && deposit.disputeHold();
+            boolean terminal = java.util.Set.of("RELEASED", "REFUNDED", "FORFEITED").contains(deposit.status())
+                    && !current.depositHold() && !deposit.disputeHold();
+            if (!continuingHeld && !terminal) {
                 throw new IllegalStateException("Dispute, Contract or deposit is not eligible for settlement.");
             }
         } else {
@@ -147,6 +152,7 @@ public class DisputeSettlementService {
                     deposit.depositAmount(), BigDecimal.ZERO, BigDecimal.ZERO, now);
             disputes.resolve(id, outcome, current.stateVersion() + 1,
                     current.decisionVersion() + 1, now);
+            if (current.depositHold()) tracking.setDisputeHold(contract.contractId(), false, now);
             var unrevoked = rewards.revokeAllForContract(contract.contractId(), decision, now);
             for (var reward : unrevoked) {
                 reputationOutbox.reverseCompletionReward(contract, reward.decisionId(),

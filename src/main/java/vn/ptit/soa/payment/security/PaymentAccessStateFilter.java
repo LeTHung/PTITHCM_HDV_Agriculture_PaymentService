@@ -24,21 +24,12 @@ final class PaymentAccessStateFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         String path = request.getRequestURI().substring(request.getContextPath().length());
-        boolean protectedRead = "GET".equals(request.getMethod())
-                && (path.equals("/api/v1/payments/deposits")
-                || path.equals("/api/v1/payments/admin/disputes")
-                || path.matches("/api/v1/payments/(?:contracts|deposits|disputes)/[^/]+")
-                || path.matches("/api/v1/payments/disputes/[^/]+/evidence(?:/[^/]+)?"));
-        boolean protectedWrite = "POST".equals(request.getMethod())
-                && path.matches("/api/v1/payments/(?:contracts/[^/]+/(?:complete|disputes)"
-                        + "|deposits/[^/]+/release|disputes/[^/]+/(?:responses|evidence)"
-                        + "|admin/disputes/[^/]+/(?:review|decisions)"
-                        + "|admin/contracts/[^/]+/disputes"
-                        + "|admin/decisions/[^/]+/reversal)");
-        if ((protectedRead || protectedWrite)
+        // Fail closed for every current and future payment API; route enumeration here
+        // previously let new lifecycle endpoints bypass the current-account check.
+        if (path.startsWith("/api/v1/payments/")
                 && SecurityContextHolder.getContext().getAuthentication() instanceof JwtAuthenticationToken jwt) {
             try {
-                if (path.equals("/api/v1/payments/admin/disputes")
+                if (path.startsWith("/api/v1/payments/admin/")
                         || path.matches("/api/v1/payments/admin/disputes/[^/]+/(?:review|decisions)")
                         || path.matches("/api/v1/payments/admin/contracts/[^/]+/disputes")
                         || path.matches("/api/v1/payments/admin/decisions/[^/]+/reversal")) {

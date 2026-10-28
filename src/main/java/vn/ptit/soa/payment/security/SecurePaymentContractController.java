@@ -23,10 +23,13 @@ import vn.ptit.soa.payment.dispute.DisputeReadNotFoundException;
 public class SecurePaymentContractController {
     private final ContractService contracts;
     private final ContractRepository repository;
+    private final ChatConversationClient chat;
 
-    public SecurePaymentContractController(ContractService contracts, ContractRepository repository) {
+    public SecurePaymentContractController(ContractService contracts, ContractRepository repository,
+            ChatConversationClient chat) {
         this.contracts = contracts;
         this.repository = repository;
+        this.chat = chat;
     }
 
     @PostMapping
@@ -35,6 +38,8 @@ public class SecurePaymentContractController {
         if (!"TRADER".equals(jwt.getClaimAsString("role"))) {
             throw new PaymentActionForbiddenException();
         }
+        chat.requireAcceptedRoom(request.conversationId(), request.offerId(), request.farmerId(),
+                jwt.getSubject(), jwt.getTokenValue());
         return contracts.create(request.offerId(), request.conversationId(), request.farmerId(),
                 jwt.getSubject(), request.totalAmount(), request.deliveryDate(), request.terms());
     }

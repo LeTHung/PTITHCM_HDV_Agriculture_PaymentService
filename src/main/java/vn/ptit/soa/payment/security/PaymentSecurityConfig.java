@@ -29,7 +29,7 @@ public class PaymentSecurityConfig {
     @Bean
     @Profile("!secure")
     SecurityFilterChain learningSecurity(HttpSecurity http) throws Exception {
-        return http.csrf(csrf -> csrf.disable())
+        return http.cors(Customizer.withDefaults()).csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll()).build();
     }
 
@@ -37,7 +37,7 @@ public class PaymentSecurityConfig {
     @Profile("secure")
     SecurityFilterChain secureSecurity(HttpSecurity http, ObjectMapper json,
             UserAccessStateClient access) throws Exception {
-        return http.csrf(csrf -> csrf.disable())
+        return http.cors(Customizer.withDefaults()).csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .addFilterAfter(new PaymentAccessStateFilter(access, json), BearerTokenAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
@@ -61,6 +61,7 @@ public class PaymentSecurityConfig {
                                 "/api/v1/payments/admin/disputes/*/review",
                                 "/api/v1/payments/admin/disputes/*/decisions",
                                 "/api/v1/payments/admin/contracts/*/disputes",
+                                "/api/v1/payments/admin/contracts/*/complete",
                                 "/api/v1/payments/admin/decisions/*/reversal")
                         .authenticated()
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/payments/contracts/*")

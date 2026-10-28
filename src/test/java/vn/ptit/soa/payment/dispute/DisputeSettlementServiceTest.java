@@ -203,18 +203,18 @@ class DisputeSettlementServiceTest {
         when(rewards.revokeAllForContract(CONTRACT, DECISION, NOW)).thenReturn(unrevoked);
 
         service.settle(DISPUTE, DECISION, DECISION, ADMIN, 2, "FARMER_VIOLATION",
-                "NONE", "Late violation verified", List.of(EVIDENCE), FARMER, "F04", "3.0");
+                "NONE", "Late violation verified", List.of(EVIDENCE), FARMER, "F04", "2.0");
 
         verify(contracts, never()).markCancelled(any(), anyLong(), any());
         verify(tracking, never()).settleDispute(any(), any(), anyLong(), any());
         verify(settlements).insert(eq(DECISION), eq(released.paymentTrackingId()), eq(CONTRACT),
-                eq(ADMIN), eq(FARMER), eq("F04"), eq(new BigDecimal("3.0")), eq(TRADER),
+                eq(ADMIN), eq(FARMER), eq("F04"), eq(new BigDecimal("2.0")), eq(TRADER),
                 eq("NONE"), eq(released.depositAmount()), eq(BigDecimal.ZERO),
                 eq(BigDecimal.ZERO), eq(NOW));
         verify(reputationOutbox).reverseCompletionReward(completed, "f-reward-id", FARMER, ADMIN, NOW);
         verify(reputationOutbox).reverseCompletionReward(completed, "t-reward-id", TRADER, ADMIN, NOW);
         verify(reputationOutbox).penalty(completed, DECISION, 1L, FARMER, "F04",
-                new BigDecimal("3.0"), ADMIN, NOW);
+                new BigDecimal("2.0"), ADMIN, NOW);
     }
 
     @Test
@@ -273,10 +273,12 @@ class DisputeSettlementServiceTest {
     }
 
     @Test
-    void activeContractRejectsNoneDisposition() {
-        assertThrows(IllegalStateException.class, () -> service.settle(DISPUTE, DECISION,
-                DECISION, ADMIN, 2, "FARMER_VIOLATION", "NONE",
-                "Verified", List.of(EVIDENCE), FARMER, "F04", "3.0"));
+    void continuingContractAcceptsNoneWithoutPayingDeposit() {
+        service.settle(DISPUTE, DECISION, DECISION, ADMIN, 2, "FARMER_VIOLATION", "NONE",
+                "Verified", List.of(EVIDENCE), FARMER, "F04", "2.0");
+        verify(tracking).setDisputeHold(CONTRACT, false, NOW);
+        verify(contracts, never()).markCancelled(any(), anyLong(), any());
+        verify(tracking, never()).settleDispute(any(), any(), anyLong(), any());
     }
 
     @Test

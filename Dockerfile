@@ -11,6 +11,7 @@ RUN ./mvnw clean package -DskipTests -B
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN mkdir -p /app/.media && chown appuser:appgroup /app/.media
 COPY --from=builder /workspace/target/*.jar app.jar
 USER appuser
 EXPOSE 8085

@@ -15,6 +15,10 @@ final class ReputationPenalty {
     private ReputationPenalty() {}
 
     static BigDecimal requireCancelledViolation(String outcome, String code, String clientPoints) {
+        return requireViolation(outcome, code, clientPoints, false);
+    }
+
+    static BigDecimal requireViolation(String outcome, String code, String clientPoints, boolean continues) {
         boolean farmer = "FARMER_VIOLATION".equals(outcome);
         boolean trader = "TRADER_VIOLATION".equals(outcome);
         if ((!farmer && !trader) || code == null || clientPoints == null
@@ -22,6 +26,7 @@ final class ReputationPenalty {
             throw new IllegalArgumentException("Violation code and penalty points are required for the liable party.");
         }
         Integer points = POINTS.get(code);
+        if (continues && "F04".equals(code)) points = 2;
         if (points == null) throw new IllegalArgumentException("Unsupported violation code.");
         BigDecimal requested;
         try {

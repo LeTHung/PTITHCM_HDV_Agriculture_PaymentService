@@ -20,6 +20,11 @@ import vn.ptit.soa.payment.dispute.DisputeEvidenceService.UnsupportedImageExcept
 @Profile("secure")
 @RestControllerAdvice(basePackages = "vn.ptit.soa.payment.security")
 public class SecurePaymentExceptionHandler {
+    @ExceptionHandler({ChatConversationClient.ChatUnavailableException.class,
+            vn.ptit.soa.payment.contract.TradingDepositClient.TradingUnavailableException.class})
+    public ResponseEntity<Map<String, Object>> dependencyUnavailable(HttpServletRequest request) {
+        return error(HttpStatus.SERVICE_UNAVAILABLE, "DEPENDENCY_UNAVAILABLE", "Cannot verify upstream service.", request);
+    }
     @ExceptionHandler({DepositNotFoundException.class, DisputeReadNotFoundException.class,
             EvidenceNotFoundException.class})
     public ResponseEntity<Map<String, Object>> notFound(HttpServletRequest request) {

@@ -30,7 +30,7 @@ class SecurePaymentContractControllerTest {
     void setUp() {
         contracts = mock(ContractService.class);
         repository = mock(ContractRepository.class);
-        controller = new SecurePaymentContractController(contracts, repository);
+        controller = new SecurePaymentContractController(contracts, repository, mock(ChatConversationClient.class));
         Instant now = Instant.parse("2026-10-19T00:00:00Z");
         Contract contract = new Contract(ID, OFFER, ROOM, FARMER, TRADER,
                 new BigDecimal("10000010.00"), "Terms", now.plusSeconds(86400),

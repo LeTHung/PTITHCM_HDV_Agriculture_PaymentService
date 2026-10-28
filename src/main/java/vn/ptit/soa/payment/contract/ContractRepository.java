@@ -29,6 +29,20 @@ public class ContractRepository {
         return contract;
     }
 
+    public void requireUnusedConversation(String conversationId) {
+        // All creators use the same transaction lock, including concurrent service instances.
+        jdbc.execute((org.springframework.jdbc.core.ConnectionCallback<Void>) connection -> {
+            try (var statement = connection.prepareStatement("SELECT pg_advisory_xact_lock(hashtextextended(?,0))")) {
+                statement.setString(1, conversationId);
+                statement.execute();
+            }
+            return null;
+        });
+        Boolean exists = jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM learning.contracts WHERE conversation_id=?::uuid)",
+                Boolean.class, conversationId);
+        if (Boolean.TRUE.equals(exists)) throw new IllegalStateException("Conversation already has a Contract.");
+    }
+
     public Optional<Contract> findById(String contractId) {
         return jdbc.query("SELECT * FROM learning.contracts WHERE contract_id=?::uuid",
                 this::map, contractId).stream().findFirst();
