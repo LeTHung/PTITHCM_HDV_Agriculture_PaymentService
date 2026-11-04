@@ -29,6 +29,20 @@ public class ContractRepository {
         return contract;
     }
 
+    public void requireUnusedConversation(String conversationId) {
+        // All creators use the same transaction lock, including concurrent service instances.
+        jdbc.execute((org.springframework.jdbc.core.ConnectionCallback<Void>) connection -> {
+            try (var statement = connection.prepareStatement("SELECT pg_advisory_xact_lock(hashtextextended(?,0))")) {
+                statement.setString(1, conversationId);
+                statement.execute();
+            }
+            return null;
+        });
+        Boolean exists = jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM learning.contracts WHERE conversation_id=?::uuid)",
+                Boolean.class, conversationId);
+        if (Boolean.TRUE.equals(exists)) throw new IllegalStateException("Conversation already has a Contract.");
+    }
+
     public Optional<Contract> findById(String contractId) {
         return jdbc.query("SELECT * FROM learning.contracts WHERE contract_id=?::uuid",
                 this::map, contractId).stream().findFirst();
@@ -56,6 +70,33 @@ public class ContractRepository {
                 WHERE contract_id=?::uuid AND status='CREATED'
                 """, stateVersion, Timestamp.from(now), contractId);
         if (changed != 1) throw new IllegalStateException("Contract was not accepted.");
+    }
+
+    public void markActive(String contractId, long stateVersion, java.time.Instant now) {
+        int changed = jdbc.update("""
+                UPDATE learning.contracts
+                SET status='ACTIVE',state_version=?,updated_at=?
+                WHERE contract_id=?::uuid AND status='PENDING_DEPOSIT'
+                """, stateVersion, Timestamp.from(now), contractId);
+        if (changed != 1) throw new IllegalStateException("Contract was not activated.");
+    }
+
+    public void markCompleted(String contractId, long stateVersion, java.time.Instant now) {
+        int changed = jdbc.update("""
+                UPDATE learning.contracts
+                SET status='COMPLETED',completed_confirmed_at=?,state_version=?,updated_at=?
+                WHERE contract_id=?::uuid AND status='ACTIVE'
+                """, Timestamp.from(now), stateVersion, Timestamp.from(now), contractId);
+        if (changed != 1) throw new IllegalStateException("Contract was not completed.");
+    }
+
+    public void markCancelled(String contractId, long stateVersion, java.time.Instant now) {
+        int changed = jdbc.update("""
+                UPDATE learning.contracts
+                SET status='CANCELLED',state_version=?,updated_at=?
+                WHERE contract_id=?::uuid AND status='ACTIVE'
+                """, stateVersion, Timestamp.from(now), contractId);
+        if (changed != 1) throw new IllegalStateException("Contract was not cancelled.");
     }
 
     private Contract map(java.sql.ResultSet rs, int row) throws java.sql.SQLException {

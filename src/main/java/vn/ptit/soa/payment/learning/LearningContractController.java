@@ -12,15 +12,23 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import vn.ptit.soa.payment.contract.Contract;
 import vn.ptit.soa.payment.contract.ContractService;
+import vn.ptit.soa.payment.contract.DepositLifecycleService;
+import vn.ptit.soa.payment.dispute.DisputeReadService;
+import org.springframework.web.bind.annotation.RequestParam;
 
 @RestController
 @Profile("learning & database-learning")
 @RequestMapping("/learning/contracts")
 public class LearningContractController {
     private final ContractService contracts;
+    private final DepositLifecycleService lifecycle;
+    private final DisputeReadService reads;
 
-    public LearningContractController(ContractService contracts) {
+    public LearningContractController(ContractService contracts, DepositLifecycleService lifecycle,
+            DisputeReadService reads) {
         this.contracts = contracts;
+        this.lifecycle = lifecycle;
+        this.reads = reads;
     }
 
     @PostMapping
@@ -31,8 +39,9 @@ public class LearningContractController {
     }
 
     @GetMapping("/{contractId}")
-    public Contract find(@PathVariable String contractId) {
-        return contracts.find(contractId);
+    public DisputeReadService.ContractDetail find(@PathVariable String contractId,
+            @RequestParam String actorId) {
+        return reads.contract(contractId, actorId);
     }
 
     public record CreateContractRequest(String offerId, String conversationId,
@@ -56,4 +65,12 @@ public class LearningContractController {
             String deliveryDate, String terms) {}
 
     public record AcceptContractRequest(String farmerId) {}
+
+    @PostMapping("/{contractId}/complete")
+    public DepositLifecycleService.CompleteResult complete(@PathVariable String contractId,
+            @RequestBody CompleteContractRequest request) {
+        return lifecycle.complete(contractId, request.traderId());
+    }
+
+    public record CompleteContractRequest(String traderId) {}
 }

@@ -56,6 +56,7 @@ public class ContractService {
         Contract contract = new Contract(UUID.randomUUID().toString(), offer, conversation,
                 farmer, trader, amount, terms, delivery, "CREATED", new BigDecimal("20.00"),
                 null, 1L, now, now);
+        contracts.requireUnusedConversation(conversation);
         contracts.insert(contract);
         outbox.created(contract, now);
         return contract;
@@ -124,7 +125,7 @@ public class ContractService {
     }
 
     public record AcceptResult(String contractId, String status, String paymentTrackingId,
-            BigDecimal depositRate, BigDecimal depositAmount, String depositStatus) {}
+            BigDecimal depositRate, @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING) @io.swagger.v3.oas.annotations.media.Schema(type="string", implementation=String.class) BigDecimal depositAmount, String depositStatus) {}
 
     public Contract find(String id) {
         return contracts.findById(uuid(id))
