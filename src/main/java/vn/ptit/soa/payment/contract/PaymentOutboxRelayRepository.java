@@ -15,10 +15,16 @@ public class PaymentOutboxRelayRepository {
     public Optional<PendingEvent> claim(String relayId) {
         var claimed = jdbc.query("""
                 WITH candidate AS (
-                    SELECT event_id FROM learning.outbox
-                    WHERE published_at IS NULL
-                      AND (lease_until IS NULL OR lease_until <= clock_timestamp())
-                    ORDER BY created_at, event_id
+                    SELECT pending.event_id FROM learning.outbox pending
+                    WHERE pending.published_at IS NULL
+                      AND (pending.lease_until IS NULL OR pending.lease_until <= clock_timestamp())
+                      AND NOT EXISTS (
+                          SELECT 1 FROM learning.outbox earlier
+                          WHERE earlier.aggregate_id = pending.aggregate_id
+                            AND earlier.published_at IS NULL
+                            AND earlier.relay_sequence < pending.relay_sequence
+                      )
+                    ORDER BY pending.relay_sequence
                     FOR UPDATE SKIP LOCKED
                     LIMIT 1
                 )
